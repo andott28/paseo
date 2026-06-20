@@ -1,0 +1,21 @@
+{
+  "name": "@getgaa/pi-natives",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native N-API bindings for GAA — grep, glob, search",
+  "main": "./native/index.js",
+  "types": "./native/index.d.ts",
+  "scripts": {
+    "build": "napi build --release --platform",
+    "build:debug": "napi build --platform"
+  },
+  "napi": {
+    "name": "pi-natives",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  }
+}
