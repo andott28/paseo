@@ -11,3 +11,10 @@ export { EvalExecutor } from "./executor.js";
 export { PythonKernel } from "./py/kernel.js";
 export { JsRuntime } from "./js/executor.js";
 export { InMemoryFilesystem } from "./memfs.js";
+export {
+  EvalSandboxManager,
+  getEvalSandboxManager,
+  resetGlobalEvalSandboxManager,
+  type EvalSandboxManagerOptions,
+  type EvalSessionSummary,
+} from "./manager.js";

@@ -396,7 +396,25 @@ function resolveWorktreesRoot(
 }
 
 function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): string {
-  return persisted.daemon?.appendSystemPrompt ?? "";
+  const userPrompt = persisted.daemon?.appendSystemPrompt ?? "";
+  // When the optional eval-sandbox integration is enabled (via env var or
+  // per-project in paseo.json), append a short hint so the model knows when
+  // to use the eval_python / eval_js / eval_reset / eval_list tools instead
+  // of writing throwaway scripts to the project. The hint is intentionally
+  // small to keep token cost low.
+  if (process.env.PASEO_EVAL_SANDBOX === "1") {
+    const hint = [
+      "",
+      "## Optional: Eval sandbox",
+      "When the user asks you to explore data, prototype an algorithm, run a quick",
+      "experiment, or iterate on multi-step code, prefer the eval_python and eval_js",
+      "tools over writing throwaway scripts to the project. They run code in a",
+      "persistent kernel, so variables and imports carry across calls. Use eval_reset",
+      "to start fresh, and eval_list to see active sessions.",
+    ].join("\n");
+    return userPrompt ? `${userPrompt}\n\n${hint}` : hint;
+  }
+  return userPrompt;
 }
 
 function resolveStaticLoadConfigSettings(

@@ -55,6 +55,7 @@ The image runs the daemon and serves the bundled web UI. It does not bundle agen
 - [Providers](/docs/providers), what a provider is and how Paseo wraps existing CLIs.
 - [CLI reference](/docs/cli), every command.
 - [Self-hosting the web UI](/docs/web-ui), serve the browser app from your own daemon.
+- [Integrations](/docs/integrations), optional add-ons like the eval sandbox.
 - [GitHub repo](https://github.com/getpaseo/paseo)
 - [Report an issue](https://github.com/getpaseo/paseo/issues)
 
