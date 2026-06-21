@@ -3,8 +3,8 @@ Set-StrictMode -Version Latest
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = (Resolve-Path "$ScriptDir\..").Path
-$InstallDir = "C:\Users\$env:USERNAME\AppData\Local\Programs\gaa"
-$InstalledExe = Join-Path $InstallDir "gaa.exe"
+$InstallDir = "C:\Users\$env:USERNAME\AppData\Local\Programs\paseo"
+$InstalledExe = Join-Path $InstallDir "paseo.exe"
 
 Write-Host "[desktop-sync] Building desktop package..."
 
@@ -12,7 +12,7 @@ Push-Location $RootDir
 try {
   npm run build:desktop
 
-  $setup = Get-ChildItem "$RootDir\packages\desktop\release\gaa-Setup-*-x64.exe" |
+  $setup = Get-ChildItem "$RootDir\packages\desktop\release\paseo-Setup-*-x64.exe" |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
@@ -20,7 +20,7 @@ try {
     throw "No x64 setup artifact found in packages/desktop/release."
   }
 
-  $runningInstalled = Get-CimInstance Win32_Process -Filter "Name='gaa.exe'" |
+  $runningInstalled = Get-CimInstance Win32_Process -Filter "Name='paseo.exe'" |
     Where-Object { $_.ExecutablePath -eq $InstalledExe }
   foreach ($proc in $runningInstalled) {
     Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
