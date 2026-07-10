@@ -973,14 +973,101 @@ export async function createPaseoDaemon(
   agentManager.setPaseoToolsEnabled(config.mcpInjectIntoAgents !== false);
 
   const mcpEnabled = config.mcpEnabled ?? true;
+  // Optional eval-sandbox integration. Enabled globally when the env var
+  // PASEO_EVAL_SANDBOX=1 is set, OR per-project via the `paseo.json`
+  // `integrations.evalSandbox.enabled` flag (read at session time below).
+  // When enabled, a single shared manager is created and used by all agent
+  // MCP sessions.
+  let evalSandboxManagerRef: import("./eval/manager.js").EvalSandboxManager | null = null;
+  const evalSandboxEnvEnabled = process.env.PASEO_EVAL_SANDBOX === "1";
+  if (evalSandboxEnvEnabled) {
+    const { getEvalSandboxManager } = await import("./eval/manager.js");
+    evalSandboxManagerRef = getEvalSandboxManager({
+      defaultTimeoutMs: Number(process.env.PASEO_EVAL_SANDBOX_TIMEOUT_MS ?? "30000") || 30_000,
+      logger,
+    });
+    logger.info("Eval sandbox integration enabled via PASEO_EVAL_SANDBOX=1");
+  }
+
   let agentMcpBaseUrl: string | null = null;
   if (mcpEnabled) {
     const agentMcpRoute = "/mcp/agents";
 
     const createAgentMcpSession = async (callerAgentId?: string) => {
-      const agentMcpServer = await createAgentMcpServer(
-        createAgentToolHostDependencies({ callerAgentId }),
-      );
+      const sessionEnableEval = evalSandboxManagerRef !== null;
+
+      const agentMcpServer = await createAgentMcpServer({
+        agentManager,
+        agentStorage,
+        terminalManager,
+        getDaemonTcpPort: () => (boundListenTarget?.type === "tcp" ? boundListenTarget.port : null),
+        scheduleService,
+        providerSnapshotManager,
+        github,
+        workspaceGitService,
+        findWorkspaceIdForCwd: findWorkspaceIdForCwdExternal,
+        listActiveWorkspaces: listActiveWorkspacesExternal,
+        archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
+        emitWorkspaceUpdatesForWorkspaceIds: emitWorkspaceUpdatesExternal,
+        markWorkspaceArchiving: markWorkspaceArchivingExternal,
+        clearWorkspaceArchiving: clearWorkspaceArchivingExternal,
+        ensureWorkspaceForCreate: ensureWorkspaceForCreateExternal,
+        createPaseoWorktree: async (input, serviceOptions) => {
+          return createPaseoWorktreeWorkflow(
+            {
+              paseoHome: config.paseoHome,
+              worktreesRoot: config.worktreesRoot,
+              createPaseoWorktree: async (workflowInput, workflowOptions) => {
+                return createRegisteredPaseoWorktree(workflowInput, {
+                  github,
+                  ...(workflowOptions?.resolveDefaultBranch
+                    ? {
+                        resolveDefaultBranch: workflowOptions.resolveDefaultBranch,
+                      }
+                    : {}),
+                  projectRegistry,
+                  workspaceRegistry,
+                  workspaceGitService,
+                });
+              },
+              warmWorkspaceGitData: async (workspace) => {
+                await Promise.all(
+                  wsServer
+                    ?.listActiveSessions()
+                    .map((session) => session.warmWorkspaceGitDataForWorkspace(workspace)) ?? [],
+                );
+              },
+              emitWorkspaceUpdateForWorkspaceId: async (workspaceId) => {
+                await emitWorkspaceUpdatesExternal([workspaceId]);
+              },
+              cacheWorkspaceSetupSnapshot: () => {},
+              emit: emitExternalSessionMessage,
+              sessionLogger: logger,
+              terminalManager,
+              archiveWorkspaceRecord: archiveWorkspaceRecordExternal,
+              serviceProxy,
+              scriptRuntimeStore,
+              getDaemonTcpPort: () =>
+                boundListenTarget?.type === "tcp" ? boundListenTarget.port : null,
+              getDaemonTcpHost: () =>
+                boundListenTarget?.type === "tcp" ? boundListenTarget.host : null,
+              serviceProxyPublicBaseUrl,
+              onScriptsChanged: null,
+            },
+            input,
+            serviceOptions,
+          );
+        },
+        paseoHome: config.paseoHome,
+        worktreesRoot: config.worktreesRoot,
+        callerAgentId,
+        enableVoiceTools: false,
+        resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
+        resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
+        enableEvalSandbox: sessionEnableEval,
+        ...(evalSandboxManagerRef ? { evalSandboxManager: evalSandboxManagerRef } : {}),
+        logger,
+      });
 
       // Stateless mode: each HTTP request builds a fresh server + transport that is
       // torn down when the response closes, so no per-session state is retained between
@@ -1294,6 +1381,9 @@ export async function createPaseoDaemon(
     detachAgentStoragePersistence();
     await agentStorage.flush().catch(() => undefined);
     await providerSnapshotManager.shutdown();
+    if (evalSandboxManagerRef) {
+      await evalSandboxManagerRef.shutdown().catch(() => undefined);
+    }
     terminalManager.killAll();
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);

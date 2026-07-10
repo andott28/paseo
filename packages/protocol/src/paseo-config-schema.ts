@@ -49,11 +49,29 @@ export const PaseoMetadataGenerationSchema = z
   .passthrough()
   .catch({});
 
+export const PaseoIntegrationEvalSandboxSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    /** Maximum in-memory size for the sandbox memfs in MB. Default 256. */
+    maxMemfsMB: z.number().int().positive().optional(),
+    /** Default timeout for code execution in ms. Default 30000. */
+    defaultTimeoutMs: z.number().int().positive().optional(),
+  })
+  .passthrough();
+
+export const PaseoIntegrationsSchema = z
+  .object({
+    /** Optional eval sandbox (Jupyter-like Python/JS execution) for agents. */
+    evalSandbox: PaseoIntegrationEvalSandboxSchema.optional(),
+  })
+  .passthrough();
+
 export const PaseoConfigRawSchema = z
   .object({
     worktree: PaseoWorktreeConfigRawSchema.optional(),
     scripts: z.record(z.string(), PaseoScriptEntryRawSchema).optional(),
     metadataGeneration: PaseoMetadataGenerationSchema.optional(),
+    integrations: PaseoIntegrationsSchema.optional(),
   })
   .passthrough();
 
@@ -70,9 +88,10 @@ export const PaseoConfigSchema = PaseoConfigRawSchema.extend({
   worktree: WorktreeConfigSchema.optional(),
   scripts: z.record(z.string(), ScriptEntrySchema).optional().catch({}),
   metadataGeneration: PaseoMetadataGenerationSchema.optional(),
+  integrations: PaseoIntegrationsSchema.optional(),
 })
-  .passthrough()
-  .catch({});
+.passthrough()
+.catch({});
 
 export const PaseoConfigRevisionSchema = z.object({
   mtimeMs: z.number(),
