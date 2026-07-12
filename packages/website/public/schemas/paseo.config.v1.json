@@ -72,6 +72,22 @@
               },
               "additionalProperties": true
             },
+            "inMemoria": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "injectIntoAgents": {
+                  "type": "boolean"
+                },
+                "storagePath": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
             "autoArchiveAfterMerge": {
               "type": "boolean"
             },

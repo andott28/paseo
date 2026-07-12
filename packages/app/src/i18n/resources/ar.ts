@@ -1676,6 +1676,11 @@ export const ar: TranslationResources = {
           hint: "سيتمكن الوكلاء من إدارة أشجار العمل والوكلاء والجداول الزمنية",
           accessibilityLabel: "حقن أدوات Paseo",
         },
+        inMemoria: {
+          title: "Enable In-Memoria",
+          hint: "Agents get persistent codebase intelligence — learns patterns, conventions, and architecture across sessions",
+          accessibilityLabel: "Inject In-Memoria codebase intelligence",
+        },
         systemPrompt: {
           title: "موجه النظام",
           hint: "إضافة موجه النظام إلى كافة الوكلاء",

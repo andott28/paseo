@@ -77,6 +77,8 @@ export type CliConfigOverrides = Partial<{
   relayUseTls: boolean;
   mcpEnabled: boolean;
   mcpInjectIntoAgents: boolean;
+  inMemoriaEnabled: boolean;
+  inMemoriaInjectIntoAgents: boolean;
   webUiEnabled: boolean;
   hostnames: HostnamesConfig;
 }>;
@@ -426,6 +428,11 @@ function resolveStaticLoadConfigSettings(
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
     mcpInjectIntoAgents:
       cli?.mcpInjectIntoAgents ?? persisted.daemon?.mcp?.injectIntoAgents ?? false,
+    inMemoriaEnabled:
+      cli?.inMemoriaEnabled ?? persisted.daemon?.inMemoria?.enabled ?? false,
+    inMemoriaInjectIntoAgents:
+      cli?.inMemoriaInjectIntoAgents ?? persisted.daemon?.inMemoria?.injectIntoAgents ?? false,
+    inMemoriaStoragePath: persisted.daemon?.inMemoria?.storagePath?.trim() || undefined,
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     terminalProfiles: persisted.daemon?.terminalProfiles,
@@ -453,6 +460,9 @@ export function loadConfig(
   const {
     mcpEnabled,
     mcpInjectIntoAgents,
+    inMemoriaEnabled,
+    inMemoriaInjectIntoAgents,
+    inMemoriaStoragePath,
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
@@ -490,6 +500,9 @@ export function loadConfig(
     trustedProxies,
     mcpEnabled,
     mcpInjectIntoAgents,
+    inMemoriaEnabled,
+    inMemoriaInjectIntoAgents,
+    inMemoriaStoragePath,
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
     appendSystemPrompt,

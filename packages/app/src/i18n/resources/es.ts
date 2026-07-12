@@ -1715,6 +1715,11 @@ export const es: TranslationResources = {
           hint: "Los agentes podrán gestionar árboles de trabajo, agentes y horarios.",
           accessibilityLabel: "Inyectar herramientasPaseo",
         },
+        inMemoria: {
+          title: "Enable In-Memoria",
+          hint: "Agents get persistent codebase intelligence — learns patterns, conventions, and architecture across sessions",
+          accessibilityLabel: "Inject In-Memoria codebase intelligence",
+        },
         systemPrompt: {
           title: "Aviso del sistema",
           hint: "Agrega un mensaje del sistema a todos los agentes.",

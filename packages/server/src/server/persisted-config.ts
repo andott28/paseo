@@ -239,6 +239,14 @@ export const PersistedConfigSchema = z
           })
           .passthrough()
           .optional(),
+        inMemoria: z
+          .object({
+            enabled: z.boolean().optional(),
+            injectIntoAgents: z.boolean().optional(),
+            storagePath: z.string().min(1).optional(),
+          })
+          .strict()
+          .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         enableTerminalAgentHooks: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),

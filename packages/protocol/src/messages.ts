@@ -136,6 +136,11 @@ export const MutableDaemonConfigSchema = z
         injectIntoAgents: z.boolean(),
       })
       .passthrough(),
+    inMemoria: z
+      .object({
+        injectIntoAgents: z.boolean(),
+      })
+      .passthrough(),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
@@ -148,6 +153,7 @@ export const MutableDaemonConfigSchema = z
 export const MutableDaemonConfigPatchSchema = z
   .object({
     mcp: MutableDaemonConfigSchema.shape.mcp.partial().optional(),
+    inMemoria: MutableDaemonConfigSchema.shape.inMemoria.partial().optional(),
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),

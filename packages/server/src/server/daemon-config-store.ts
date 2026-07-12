@@ -208,6 +208,15 @@ function mergeMutableConfigIntoPersistedConfig(params: {
         ...persisted.daemon?.mcp,
         injectIntoAgents: mutable.mcp.injectIntoAgents,
       },
+      ...(mutable.inMemoria
+        ? {
+            inMemoria: {
+              ...persisted.daemon?.inMemoria,
+              injectIntoAgents: mutable.inMemoria.injectIntoAgents,
+              ...(mutable.inMemoria.injectIntoAgents ? { enabled: true } : {}),
+            },
+          }
+        : {}),
       autoArchiveAfterMerge: mutable.autoArchiveAfterMerge,
       enableTerminalAgentHooks: mutable.enableTerminalAgentHooks,
       appendSystemPrompt: mutable.appendSystemPrompt,

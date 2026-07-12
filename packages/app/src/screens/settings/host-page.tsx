@@ -262,6 +262,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
           <InjectPaseoToolsCard serverId={serverId} />
+          <InjectInMemoriaCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (
@@ -955,6 +956,45 @@ function InjectPaseoToolsCard({ serverId }: { serverId: string }) {
           value={config?.mcp.injectIntoAgents !== false}
           onValueChange={handleValueChange}
           accessibilityLabel={t("settings.host.orchestration.enableTools.accessibilityLabel")}
+        />
+      </View>
+    </View>
+  );
+}
+
+function InjectInMemoriaCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
+  const isConnected = useHostRuntimeIsConnected(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
+
+  const handleValueChange = useCallback(
+    (next: boolean) => {
+      void patchConfig({
+        inMemoria: {
+          injectIntoAgents: next,
+        },
+      });
+    },
+    [patchConfig],
+  );
+
+  if (!isConnected) return null;
+
+  return (
+    <View style={settingsStyles.card} testID="host-page-inject-in-memoria-card">
+      <View style={settingsStyles.row}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.orchestration.inMemoria.title")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.host.orchestration.inMemoria.hint")}
+          </Text>
+        </View>
+        <Switch
+          value={config?.inMemoria.injectIntoAgents === true}
+          onValueChange={handleValueChange}
+          accessibilityLabel={t("settings.host.orchestration.inMemoria.accessibilityLabel")}
         />
       </View>
     </View>

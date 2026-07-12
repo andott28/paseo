@@ -1698,6 +1698,11 @@ export const en = {
           hint: "Agents will be able to manage worktrees, agents and schedules",
           accessibilityLabel: "Inject Paseo tools",
         },
+        inMemoria: {
+          title: "Enable In-Memoria",
+          hint: "Agents get persistent codebase intelligence — learns patterns, conventions, and architecture across sessions",
+          accessibilityLabel: "Inject In-Memoria codebase intelligence",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "Adds a system prompt to all agents",

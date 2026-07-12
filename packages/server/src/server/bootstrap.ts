@@ -329,6 +329,9 @@ export interface PaseoDaemonConfig {
   trustedProxies?: true | string[];
   mcpEnabled?: boolean;
   mcpInjectIntoAgents?: boolean;
+  inMemoriaEnabled?: boolean;
+  inMemoriaInjectIntoAgents?: boolean;
+  inMemoriaStoragePath?: string;
   autoArchiveAfterMerge?: boolean;
   enableTerminalAgentHooks?: boolean;
   appendSystemPrompt?: string;
@@ -440,6 +443,9 @@ export async function createPaseoDaemon(
     config.paseoHome,
     {
       mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
+      inMemoria: {
+        injectIntoAgents: config.inMemoriaInjectIntoAgents ?? false,
+      },
       providers: Object.fromEntries(
         Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => [
           providerId,
@@ -1225,6 +1231,14 @@ export async function createPaseoDaemon(
             daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
               agentManager.setMcpBaseUrl(value ? mcpBaseUrl : null);
               agentManager.setPaseoToolsEnabled(value !== false);
+            });
+            daemonConfigStore.onFieldChange("inMemoria.injectIntoAgents", (value) => {
+              agentManager.setInMemoriaInjectIntoAgents(value === true);
+              agentManager.setInMemoriaSystemPrompt(
+                value === true
+                  ? "In-Memoria codebase intelligence is available. Query it to discover project patterns, file routing, and architectural conventions. It persists across sessions — ask it about the codebase before writing code."
+                  : "",
+              );
             });
             daemonConfigStore.onFieldChange("appendSystemPrompt", (value) => {
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");

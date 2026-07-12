@@ -62,7 +62,7 @@ import { ForegroundRunState, type ForegroundTurnWaiter } from "./foreground-run-
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
+import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer, stripInternalInMemoriaMcpServer, withRuntimeInMemoriaMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
 
@@ -212,6 +212,8 @@ export interface AgentManagerOptions {
   appendSystemPrompt?: string;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
+  inMemoriaInjectIntoAgents?: boolean;
+  inMemoriaBasePath?: string;
   logger: Logger;
 }
 
@@ -528,9 +530,12 @@ export class AgentManager {
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
+  private inMemoriaInjectIntoAgents: boolean;
+  private readonly inMemoriaBasePath: string | null;
   private paseoToolsEnabled = true;
   private paseoToolCatalogFactory: PaseoToolCatalogFactory | null = null;
   private appendSystemPrompt: string;
+  private inMemoriaSystemPrompt = "";
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
@@ -545,6 +550,8 @@ export class AgentManager {
     this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
     this.mcpAuthToken = options?.mcpAuthToken ?? null;
+    this.inMemoriaInjectIntoAgents = options?.inMemoriaInjectIntoAgents ?? false;
+    this.inMemoriaBasePath = options?.inMemoriaBasePath ?? null;
     this.configurePaseoTools(options);
     this.appendSystemPrompt = options.appendSystemPrompt ?? "";
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
@@ -615,6 +622,14 @@ export class AgentManager {
 
   setPaseoToolCatalogFactory(factory: PaseoToolCatalogFactory | null): void {
     this.paseoToolCatalogFactory = factory;
+  }
+
+  setInMemoriaInjectIntoAgents(enabled: boolean): void {
+    this.inMemoriaInjectIntoAgents = enabled;
+  }
+
+  setInMemoriaSystemPrompt(prompt: string): void {
+    this.inMemoriaSystemPrompt = prompt;
   }
 
   /**
@@ -3718,7 +3733,9 @@ export class AgentManager {
     config: AgentSessionConfig,
     agentId: string,
   ): Promise<PreparedSessionConfig> {
-    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config));
+    const storedConfig = await this.normalizeConfig(
+      stripInternalInMemoriaMcpServer(stripInternalPaseoMcpServer(config)),
+    );
     const launchConfig = this.applyDaemonAppendSystemPrompt(
       withRuntimePaseoMcpServer({
         config: storedConfig,
@@ -3727,11 +3744,29 @@ export class AgentManager {
         mcpAuthToken: this.mcpAuthToken,
       }),
     );
+
+    if (this.inMemoriaInjectIntoAgents && this.inMemoriaBasePath) {
+      return {
+        storedConfig,
+        launchConfig: withRuntimeInMemoriaMcpServer({
+          config: launchConfig,
+          cwd: storedConfig.cwd,
+          basePath: this.inMemoriaBasePath,
+        }),
+      };
+    }
+
     return { storedConfig, launchConfig };
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
+    const daemonAppendSystemPrompt = [
+      this.appendSystemPrompt.trim(),
+      this.inMemoriaSystemPrompt.trim(),
+    ]
+      .filter((p) => p.length > 0)
+      .join("\n\n");
+
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 

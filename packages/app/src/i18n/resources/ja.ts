@@ -1694,6 +1694,11 @@ export const ja: TranslationResources = {
           hint: "エージェントがワークツリー、エージェント、スケジュールを管理できるようになります",
           accessibilityLabel: "Paseoツールを有効にする",
         },
+        inMemoria: {
+          title: "Enable In-Memoria",
+          hint: "Agents get persistent codebase intelligence — learns patterns, conventions, and architecture across sessions",
+          accessibilityLabel: "Inject In-Memoria codebase intelligence",
+        },
         systemPrompt: {
           title: "システムプロンプト",
           hint: "すべてのエージェントにシステムプロンプトを追加します",

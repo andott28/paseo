@@ -1707,6 +1707,11 @@ export const ru: TranslationResources = {
           hint: "Агенты смогут управлять рабочими деревьями, агентами и расписаниями.",
           accessibilityLabel: "Инструменты внедрения Paseo",
         },
+        inMemoria: {
+          title: "Enable In-Memoria",
+          hint: "Agents get persistent codebase intelligence — learns patterns, conventions, and architecture across sessions",
+          accessibilityLabel: "Inject In-Memoria codebase intelligence",
+        },
         systemPrompt: {
           title: "Системная подсказка",
           hint: "Добавляет системное приглашение всем агентам",

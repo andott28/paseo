@@ -1657,6 +1657,11 @@ export const zhCN: TranslationResources = {
           hint: "Agent 将能够管理 worktree、Agent 和计划",
           accessibilityLabel: "注入 Paseo tools",
         },
+        inMemoria: {
+          title: "Enable In-Memoria",
+          hint: "Agents get persistent codebase intelligence — learns patterns, conventions, and architecture across sessions",
+          accessibilityLabel: "Inject In-Memoria codebase intelligence",
+        },
         systemPrompt: {
           title: "System prompt",
           hint: "为所有 Agent 添加 system prompt",
