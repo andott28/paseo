@@ -1427,13 +1427,12 @@ export class ACPAgentSession implements AgentSession, ACPClient {
         messageId,
         prompt: toACPContentBlocks(prompt),
       })
-      .then((response) => {
-        this.handlePromptResponse(response, turnId);
-        return;
+      .then(async (response) => {
+        await this.handlePromptResponse(response, turnId);
       })
-      .catch((error) => {
+      .catch(async (error) => {
         const summary = summarizeACPRequestError(error);
-        this.finishTurn({
+        await this.finishTurn({
           type: "turn_failed",
           provider: this.provider,
           error: summary.message,
@@ -2213,13 +2212,13 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     child.stderr.on("data", (chunk: Buffer | string) => {
       stderrChunks.push(chunk.toString());
     });
-    child.once("exit", (code, signal) => {
+    child.once("exit", async (code, signal) => {
       if (this.closed) {
         return;
       }
       if (this.activeForegroundTurnId) {
         this.synthesizeCanceledToolCalls();
-        this.finishTurn({
+        await this.finishTurn({
           type: "turn_failed",
           provider: this.provider,
           error: `ACP agent exited unexpectedly (${code ?? "null"}${signal ? `, ${signal}` : ""})`,
@@ -2510,13 +2509,13 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     void update;
   }
 
-  private handlePromptResponse(response: PromptResponse, turnId: string): void {
+  private async handlePromptResponse(response: PromptResponse, turnId: string): Promise<void> {
     this.currentTurnUsage = mapACPUsage(response.usage) ?? this.currentTurnUsage;
 
     switch (response.stopReason) {
       case "cancelled":
         this.synthesizeCanceledToolCalls();
-        this.finishTurn({
+        await this.finishTurn({
           type: "turn_canceled",
           provider: this.provider,
           reason: "Interrupted",
@@ -2528,7 +2527,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       case "max_turn_requests":
       case "refusal":
       default:
-        this.finishTurn({
+        await this.finishTurn({
           type: "turn_completed",
           provider: this.provider,
           usage: this.currentTurnUsage,
@@ -2596,14 +2595,33 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     };
   }
 
-  private finishTurn(
+  private async finishTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
-  ): void {
+  ): Promise<void> {
     this.activeForegroundTurnId = null;
     if (this.activeSubmittedUserMessage?.turnId === event.turnId) {
       this.activeSubmittedUserMessage = null;
     }
     this.pushEvent(event);
+
+    if (event.type === "turn_failed" || event.type === "turn_canceled") {
+      await this.killRemainingTerminals();
+    }
+  }
+
+  private async killRemainingTerminals(): Promise<void> {
+    if (this.terminalEntries.size === 0) {
+      return;
+    }
+
+    const terminations = Array.from(this.terminalEntries.values(), (terminal) =>
+      this.terminateProcess(terminal.child, {
+        gracefulTimeoutMs: 2_000,
+        forceTimeoutMs: 2_000,
+      }),
+    );
+    await Promise.all(terminations);
+    this.terminalEntries.clear();
   }
 
   private isSubmittedUserMessageEcho(
