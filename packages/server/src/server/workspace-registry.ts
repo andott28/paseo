@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { resolve, sep } from "node:path";
 
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -49,6 +50,13 @@ const PersistedWorkspaceRecordSchema = z.object({
   // baseRefName). Only worktree workspaces carry a base branch; checkout-branch
   // worktrees and directory/local_checkout workspaces leave it null.
   baseBranch: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  // The parent workspace when this workspace is a subdirectory of another
+  // workspace. Root workspaces leave this null. Auto-detected on creation.
+  parentWorkspaceId: z
     .string()
     .nullable()
     .optional()
@@ -254,6 +262,7 @@ export function createPersistedWorkspaceRecord(input: {
   title?: string | null;
   branch?: string | null;
   baseBranch?: string | null;
+  parentWorkspaceId?: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
@@ -263,6 +272,7 @@ export function createPersistedWorkspaceRecord(input: {
     title: input.title ?? null,
     branch: input.branch ?? null,
     baseBranch: input.baseBranch ?? null,
+    parentWorkspaceId: input.parentWorkspaceId ?? null,
     archivedAt: input.archivedAt ?? null,
   });
 }
@@ -279,4 +289,28 @@ export function resolveWorkspaceName(input: {
 
 export function resolveWorkspaceDisplayName(record: PersistedWorkspaceRecord): string {
   return resolveWorkspaceName({ title: record.title, derivedDisplayName: record.displayName });
+}
+
+// Find the deepest non-archived workspace whose cwd is a parent directory of
+// `childCwd`. Returns the parent workspace ID or null. Used to auto-detect
+// parent-child relationships when creating subdirectory workspaces.
+export function findEnclosingParentWorkspaceId(
+  childCwd: string,
+  workspaces: Iterable<PersistedWorkspaceRecord>,
+): string | null {
+  const resolvedChild = resolve(childCwd);
+  let bestMatchLength = 0;
+  let bestMatchId: string | null = null;
+  for (const workspace of workspaces) {
+    if (workspace.archivedAt) continue;
+    const workspaceCwd = resolve(workspace.cwd);
+    if (workspaceCwd === resolvedChild) continue;
+    const prefix = workspaceCwd.endsWith(sep) ? workspaceCwd : `${workspaceCwd}${sep}`;
+    if (!resolvedChild.startsWith(prefix)) continue;
+    if (workspaceCwd.length > bestMatchLength) {
+      bestMatchLength = workspaceCwd.length;
+      bestMatchId = workspace.workspaceId;
+    }
+  }
+  return bestMatchId;
 }

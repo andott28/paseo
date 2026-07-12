@@ -26,6 +26,11 @@ export interface SidebarWorkspacePlacement {
   projectKind: WorkspaceDescriptor["projectKind"];
   workspaceKind: WorkspaceDescriptor["workspaceKind"];
   name: string;
+  parentWorkspaceId?: string | null;
+  /** Render indent depth: 0 for root, 1 for child, 2 for grandchild, etc. */
+  depth?: number;
+  /** Tree connector prefix for hierarchy display, e.g. "├── " or "└── ". */
+  treeConnector?: string;
 }
 
 export interface SidebarStatusWorkspacePlacement extends SidebarWorkspacePlacement {
@@ -112,6 +117,7 @@ export function createSidebarWorkspaceEntry(input: {
     workspaceKind: input.workspace.workspaceKind,
     name: input.workspace.name,
     title: input.workspace.title ?? null,
+    parentWorkspaceId: input.workspace.parentWorkspaceId ?? null,
     currentBranch: normalizeCurrentBranch(input.workspace.gitRuntime?.currentBranch),
     statusBucket: effectiveStatus.status,
     statusEnteredAt: effectiveStatus.enteredAt,
@@ -228,6 +234,8 @@ function createStructuralWorkspaceEntry(input: {
     projectKind: input.project.projectKind,
     workspaceKind: "checkout",
     name: identity.workspaceId,
+    parentWorkspaceId: undefined,
+    depth: 0,
   };
 }
 

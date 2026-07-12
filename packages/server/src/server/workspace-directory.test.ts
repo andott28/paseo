@@ -80,6 +80,7 @@ class WorkspaceStatus {
       projectKind: "git",
       workspaceKind: workspace.kind,
       name: workspace.displayName,
+      parentWorkspaceId: null,
       archivingAt: null,
       status: "done",
       activityAt: null,

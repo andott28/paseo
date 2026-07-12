@@ -1,6 +1,7 @@
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { resolve } from "node:path";
 import {
+  findEnclosingParentWorkspaceId,
   type PersistedWorkspaceRecord,
   type ProjectRegistry,
   type WorkspaceRegistry,
@@ -302,6 +303,12 @@ export async function createLocalCheckoutWorkspace(
   // reads. HEAD/detached resolves to null — there is no branch to report.
   const currentBranch = checkout.currentBranch?.trim() ?? null;
   const branch = currentBranch && currentBranch.toUpperCase() !== "HEAD" ? currentBranch : null;
+
+  // Auto-detect parent workspace: if the new workspace is a subdirectory of
+  // an existing workspace, link it as a child.
+  const existingWorkspaces = await deps.workspaceRegistry.list();
+  const parentWorkspaceId = findEnclosingParentWorkspaceId(normalizedCwd, existingWorkspaces);
+
   const workspace = createPersistedWorkspaceRecord({
     workspaceId: generateWorkspaceId(),
     projectId: projectRecord.projectId,
@@ -310,6 +317,7 @@ export async function createLocalCheckoutWorkspace(
     displayName: membership.workspaceDisplayName,
     branch,
     title: trimmedTitle ? trimmedTitle : null,
+    parentWorkspaceId,
     createdAt: now,
     updatedAt: now,
   });

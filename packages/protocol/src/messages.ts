@@ -2634,10 +2634,12 @@ export const WorkspaceDescriptorPayloadSchema = z
     scripts: z.array(WorkspaceScriptPayloadSchema).default([]),
     gitRuntime: WorkspaceGitRuntimePayloadSchema,
     githubRuntime: WorkspaceGitHubRuntimePayloadSchema,
+    parentWorkspaceId: z.string().nullable().optional(),
     project: ProjectPlacementPayloadSchema.optional(),
   })
   .transform((workspace) => ({
     ...workspace,
+    parentWorkspaceId: workspace.parentWorkspaceId ?? null,
     workspaceDirectory: workspace.workspaceDirectory ?? workspace.projectRootPath,
   }));
 

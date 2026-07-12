@@ -7,6 +7,7 @@ import {
 import {
   createPersistedProjectRecord,
   createPersistedWorkspaceRecord,
+  findEnclosingParentWorkspaceId,
   type PersistedProjectRecord,
   type PersistedWorkspaceRecord,
   type ProjectRegistry,
@@ -224,6 +225,11 @@ export function createWorkspaceProvisioningService(deps: {
     });
     await projectRegistry.upsert(projectRecord);
 
+    // Auto-detect parent workspace: if the new workspace is a subdirectory of
+    // an existing workspace, link it as a child.
+    const existingWorkspaces = await workspaceRegistry.list();
+    const parentWorkspaceId = findEnclosingParentWorkspaceId(cwd, existingWorkspaces);
+
     const workspaceRecord = createPersistedWorkspaceRecord({
       workspaceId: generateWorkspaceId(),
       projectId: projectRecord.projectId,
@@ -231,6 +237,7 @@ export function createWorkspaceProvisioningService(deps: {
       kind: membership.workspaceKind,
       displayName: membership.workspaceDisplayName,
       title: title ?? null,
+      parentWorkspaceId,
       createdAt: timestamp,
       updatedAt: timestamp,
     });

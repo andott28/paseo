@@ -786,6 +786,12 @@ export const en = {
         openNewWindowFailed: "Couldn't open a new window",
         remove: "Remove project",
         removing: "Removing...",
+        addSubdirectory: "Add subdirectory",
+      },
+      addSubdirectory: {
+        title: "Add subdirectory",
+        placeholder: "Subdirectory name",
+        create: "Create",
       },
       confirmations: {
         removeTitle: "Remove project?",
@@ -798,6 +804,7 @@ export const en = {
         hostDisconnected: "Host is not connected",
         removeFailed: "Failed to remove some workspaces",
         updateHostToRemove: "Update the host to remove projects.",
+        noHost: "No host available",
       },
       empty: {
         title: "No projects yet",
@@ -821,6 +828,12 @@ export const en = {
         hideFromSidebar: "Hide from sidebar",
         archiving: "Archiving...",
         hiding: "Hiding...",
+        addSubdirectory: "Add subdirectory",
+      },
+      addSubdirectory: {
+        title: "Add subdirectory",
+        placeholder: "Subdirectory name",
+        create: "Create",
       },
       confirmations: {
         hideTitle: "Hide workspace?",
@@ -841,6 +854,8 @@ export const en = {
         hostDisconnected: "Host is not connected",
         hideFailed: "Failed to hide workspace",
         archiveFailed: "Failed to archive worktree",
+        subdirectoryCreated: "Subdirectory created",
+        subdirectoryFailed: "Failed to create subdirectory",
       },
     },
   },

@@ -131,6 +131,63 @@ const workspaceKeyExtractor = (workspace: SidebarWorkspacePlacement) => workspac
 
 const projectKeyExtractor = (project: SidebarProjectEntry) => project.projectKey;
 
+/**
+ * Flatten a workspace list into a tree-ordered list with depth and connector
+ * information. Root workspaces appear first, followed by their children
+ * recursively, each annotated with the visual tree connector prefix.
+ */
+function flattenWorkspaceTree(
+  workspaces: SidebarWorkspacePlacement[],
+): SidebarWorkspacePlacement[] {
+  if (workspaces.length === 0) return workspaces;
+
+  const parentToChildren = new Map<string, SidebarWorkspacePlacement[]>();
+  const roots: SidebarWorkspacePlacement[] = [];
+
+  for (const ws of workspaces) {
+    const parentId = ws.parentWorkspaceId ?? null;
+    if (parentId) {
+      const children = parentToChildren.get(parentId) ?? [];
+      children.push(ws);
+      parentToChildren.set(parentId, children);
+    } else {
+      roots.push(ws);
+    }
+  }
+
+  const result: SidebarWorkspacePlacement[] = [];
+
+  function walk(
+    nodes: SidebarWorkspacePlacement[],
+    depth: number,
+    ancestorConnectors: string[],
+  ) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const isLast = i === nodes.length - 1;
+      node.depth = depth;
+
+      if (depth > 0) {
+        const connector = isLast ? "└── " : "├── ";
+        node.treeConnector = ancestorConnectors.join("") + connector;
+      } else {
+        node.treeConnector = undefined;
+      }
+
+      result.push(node);
+
+      const children = parentToChildren.get(node.workspaceId) ?? [];
+      if (children.length > 0) {
+        const nextAncestor = isLast ? "    " : "│   ";
+        walk(children, depth + 1, [...ancestorConnectors, nextAncestor]);
+      }
+    }
+  }
+
+  walk(roots, 0, []);
+  return result;
+}
+
 const WORKSPACE_STATUS_DOT_WIDTH = 14;
 const DEFAULT_STATUS_DOT_SIZE = 7;
 const EMPHASIZED_STATUS_DOT_SIZE = 9;
@@ -262,12 +319,15 @@ interface ProjectHeaderRowProps {
   menuController: ReturnType<typeof useContextMenu> | null;
   onRemoveProject?: () => void;
   removeProjectStatus?: "idle" | "pending";
+  onAddSubdirectory?: () => void;
   dragHandleProps?: DraggableListDragHandleProps;
 }
 
 interface WorkspaceRowInnerProps {
   workspace: SidebarWorkspaceEntry;
   subtitle?: string | null;
+  treeConnector?: string | null;
+  depth?: number;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -286,6 +346,7 @@ interface WorkspaceRowInnerProps {
   onCopyPath?: () => void;
   onRename?: () => void;
   onMarkAsRead?: () => void;
+  onAddSubdirectory?: () => void;
   archiveShortcutKeys?: ShortcutKey[][] | null;
 }
 
@@ -496,6 +557,7 @@ function ProjectRowTrailingActions({
   onBeginWorkspaceSetup,
   onRemoveProject,
   removeProjectStatus,
+  onAddSubdirectory,
 }: {
   project: SidebarProjectEntry;
   displayName: string;
@@ -506,6 +568,7 @@ function ProjectRowTrailingActions({
   onBeginWorkspaceSetup: () => void;
   onRemoveProject?: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
+  onAddSubdirectory?: () => void;
 }) {
   const actionsVisible = isHovered || platformIsNative || isMobileBreakpoint;
   return (
@@ -529,6 +592,7 @@ function ProjectRowTrailingActions({
             projectPath={project.iconWorkingDir}
             onRemoveProject={onRemoveProject}
             removeProjectStatus={removeProjectStatus}
+            onAddSubdirectory={onAddSubdirectory}
           />
         </View>
       ) : null}
@@ -557,16 +621,20 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
   );
 }
 
+const folderPlusLeadingIcon = <ThemedPlus size={14} uniProps={foregroundMutedColorMapping} />;
+
 function ProjectKebabMenu({
   projectKey,
   projectPath,
   onRemoveProject,
   removeProjectStatus,
+  onAddSubdirectory,
 }: {
   projectKey: string;
   projectPath: string;
   onRemoveProject: () => void;
   removeProjectStatus: "idle" | "pending" | "success";
+  onAddSubdirectory?: () => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -619,6 +687,15 @@ function ProjectKebabMenu({
             {t("sidebar.project.actions.openNewWindow")}
           </DropdownMenuItem>
         ) : null}
+        {onAddSubdirectory ? (
+          <DropdownMenuItem
+            testID={`sidebar-project-menu-add-subdirectory-${projectKey}`}
+            leading={folderPlusLeadingIcon}
+            onSelect={onAddSubdirectory}
+          >
+            {t("sidebar.project.actions.addSubdirectory")}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           testID={`sidebar-project-menu-remove-${projectKey}`}
           leading={trash2LeadingIcon}
@@ -649,6 +726,7 @@ function WorkspaceRowRightGroup({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onAddSubdirectory,
 }: {
   workspace: SidebarWorkspaceEntry;
   isHovered: boolean;
@@ -665,6 +743,7 @@ function WorkspaceRowRightGroup({
   onCopyBranchName?: () => void;
   onCopyPath?: () => void;
   onRename?: () => void;
+  onAddSubdirectory?: () => void;
 }) {
   const { t } = useTranslation();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
@@ -698,6 +777,7 @@ function WorkspaceRowRightGroup({
                 onRename={onRename}
                 onMarkAsRead={onMarkAsRead}
                 onArchive={onArchive}
+                onAddSubdirectory={onAddSubdirectory}
                 archiveLabel={archiveLabel}
                 archiveStatus={archiveStatus}
                 archivePendingLabel={archivePendingLabel}
@@ -718,6 +798,7 @@ function WorkspaceKebabMenu({
   onRename,
   onMarkAsRead,
   onArchive,
+  onAddSubdirectory,
   archiveLabel,
   archiveStatus,
   archivePendingLabel,
@@ -729,6 +810,7 @@ function WorkspaceKebabMenu({
   onRename?: () => void;
   onMarkAsRead?: () => void;
   onArchive: () => void;
+  onAddSubdirectory?: () => void;
   archiveLabel?: string;
   archiveStatus?: "idle" | "pending" | "success";
   archivePendingLabel?: string;
@@ -785,6 +867,15 @@ function WorkspaceKebabMenu({
             onSelect={onMarkAsRead}
           >
             Mark as read
+          </DropdownMenuItem>
+        ) : null}
+        {onAddSubdirectory ? (
+          <DropdownMenuItem
+            testID={`sidebar-workspace-menu-add-subdirectory-${workspaceKey}`}
+            leading={<ThemedPlus size={14} uniProps={foregroundMutedColorMapping} />}
+            onSelect={onAddSubdirectory}
+          >
+            {t("sidebar.workspace.actions.addSubdirectory")}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem
@@ -1279,6 +1370,7 @@ function ProjectHeaderRow({
   menuController,
   onRemoveProject,
   removeProjectStatus = "idle",
+  onAddSubdirectory,
   dragHandleProps,
 }: ProjectHeaderRowProps) {
   const [isHovered, setIsHovered] = useState(false);
@@ -1359,6 +1451,7 @@ function ProjectHeaderRow({
         onBeginWorkspaceSetup={handleBeginWorkspaceSetup}
         onRemoveProject={onRemoveProject}
         removeProjectStatus={removeProjectStatus}
+        onAddSubdirectory={onAddSubdirectory}
       />
       {showShortcutBadge && shortcutNumber !== null ? (
         <View style={styles.projectShortcutBadgeOverlay} pointerEvents="none">
@@ -1419,6 +1512,8 @@ function ProjectHeaderRow({
 function WorkspaceRowInner({
   workspace,
   subtitle,
+  treeConnector,
+  depth = 0,
   selected,
   shortcutNumber,
   showShortcutBadge,
@@ -1436,6 +1531,7 @@ function WorkspaceRowInner({
   onCopyBranchName,
   onCopyPath,
   onRename,
+  onAddSubdirectory,
   archiveShortcutKeys,
 }: WorkspaceRowInnerProps) {
   const _isCompact = useIsCompactFormFactor();
@@ -1501,6 +1597,7 @@ function WorkspaceRowInner({
               <SidebarWorkspaceRowContent
                 workspace={workspace}
                 subtitle={subtitle}
+                treeConnector={treeConnector}
                 scriptIconKind={scriptIconKind}
                 isHovered={isHovered}
                 isLoading={isArchiving || isCreating}
@@ -1523,6 +1620,7 @@ function WorkspaceRowInner({
                   onCopyBranchName={onCopyBranchName}
                   onCopyPath={onCopyPath}
                   onRename={onRename}
+                  onAddSubdirectory={onAddSubdirectory}
                 />
               </SidebarWorkspaceRowContent>
             </Pressable>
@@ -1536,6 +1634,8 @@ function WorkspaceRowInner({
 function WorkspaceRowWithMenu({
   workspace,
   subtitle,
+  treeConnector,
+  depth,
   selected,
   shortcutNumber,
   showShortcutBadge,
@@ -1548,6 +1648,8 @@ function WorkspaceRowWithMenu({
 }: {
   workspace: SidebarWorkspaceEntry;
   subtitle?: string | null;
+  treeConnector?: string;
+  depth?: number;
   selected: boolean;
   shortcutNumber: number | null;
   showShortcutBadge: boolean;
@@ -1639,6 +1741,43 @@ function WorkspaceRowWithMenu({
     },
   });
 
+  const [isSubdirPromptOpen, setIsSubdirPromptOpen] = useState(false);
+  const handleOpenAddSubdirectory = useCallback(() => {
+    setIsSubdirPromptOpen(true);
+  }, []);
+  const handleCloseAddSubdirectory = useCallback(() => {
+    setIsSubdirPromptOpen(false);
+  }, []);
+  const createSubdirectoryMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const client = getHostRuntimeStore().getClient(workspace.serverId);
+      if (!client) {
+        throw new Error(t("sidebar.workspace.toasts.hostDisconnected"));
+      }
+      const workspaceDir = requireWorkspaceDirectory({
+        workspaceId: workspace.workspaceId,
+        workspaceDirectory: workspace.workspaceDirectory,
+      });
+      await client.createWorkspace({
+        source: { kind: "directory", path: `${workspaceDir}/${trimmed}` },
+      });
+    },
+    onSuccess: () => {
+      toast.show(t("sidebar.workspace.toasts.subdirectoryCreated"));
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : t("sidebar.workspace.toasts.subdirectoryFailed"));
+    },
+  });
+  const handleSubmitAddSubdirectory = useCallback(
+    async (value: string) => {
+      await createSubdirectoryMutation.mutateAsync(value);
+    },
+    [createSubdirectoryMutation],
+  );
+
   const handleOpenRename = useCallback(() => {
     setIsRenameOpen(true);
   }, []);
@@ -1681,6 +1820,8 @@ function WorkspaceRowWithMenu({
       <WorkspaceRowInner
         workspace={workspace}
         subtitle={subtitle}
+        treeConnector={treeConnector}
+        depth={depth}
         selected={selected}
         shortcutNumber={shortcutNumber}
         showShortcutBadge={showShortcutBadge}
@@ -1703,6 +1844,7 @@ function WorkspaceRowWithMenu({
         onCopyPath={handleCopyPath}
         onRename={handleOpenRename}
         onMarkAsRead={hasClearableAttention ? handleMarkAsRead : undefined}
+        onAddSubdirectory={handleOpenAddSubdirectory}
         archiveShortcutKeys={selected ? archiveShortcutKeys : null}
       />
       <AdaptiveRenameModal
@@ -1714,6 +1856,16 @@ function WorkspaceRowWithMenu({
         onClose={handleCloseRename}
         onSubmit={handleSubmitRename}
         testID={`sidebar-workspace-rename-modal-${workspace.workspaceKey}`}
+      />
+      <AdaptiveRenameModal
+        visible={isSubdirPromptOpen}
+        title={t("sidebar.workspace.addSubdirectory.title")}
+        initialValue=""
+        placeholder={t("sidebar.workspace.addSubdirectory.placeholder")}
+        submitLabel={t("sidebar.workspace.addSubdirectory.create")}
+        onClose={handleCloseAddSubdirectory}
+        onSubmit={handleSubmitAddSubdirectory}
+        testID={`sidebar-workspace-add-subdirectory-modal-${workspace.workspaceKey}`}
       />
     </>
   );
@@ -1846,6 +1998,8 @@ function WorkspaceRow({
     <WorkspaceRowWithMenu
       workspace={hydratedWorkspace}
       subtitle={subtitle}
+      treeConnector={workspace.treeConnector}
+      depth={workspace.depth}
       selected={selected}
       shortcutNumber={shortcutNumber}
       showShortcutBadge={showShortcutBadge}
@@ -1984,6 +2138,44 @@ function ProjectBlock({
   const toast = useToast();
   const { t } = useTranslation();
   const [isRemovingProject, setIsRemovingProject] = useState(false);
+  const [isSubdirPromptOpen, setIsSubdirPromptOpen] = useState(false);
+  const handleOpenAddSubdirectory = useCallback(() => {
+    setIsSubdirPromptOpen(true);
+  }, []);
+  const handleCloseAddSubdirectory = useCallback(() => {
+    setIsSubdirPromptOpen(false);
+  }, []);
+  const createSubdirectoryMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const firstHost = project.hosts[0];
+      if (!firstHost) {
+        throw new Error(t("sidebar.project.toasts.noHost"));
+      }
+      const client = getHostRuntimeStore().getClient(firstHost.serverId);
+      if (!client) {
+        throw new Error(t("sidebar.workspace.toasts.hostDisconnected"));
+      }
+      await client.createWorkspace({
+        source: { kind: "directory", path: `${project.iconWorkingDir}/${trimmed}` },
+      });
+    },
+    onSuccess: () => {
+      toast.show(t("sidebar.workspace.toasts.subdirectoryCreated"));
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : t("sidebar.workspace.toasts.subdirectoryFailed"),
+      );
+    },
+  });
+  const handleSubmitAddSubdirectory = useCallback(
+    async (value: string) => {
+      await createSubdirectoryMutation.mutateAsync(value);
+    },
+    [createSubdirectoryMutation],
+  );
 
   const handleRemoveProject = useCallback(() => {
     if (isRemovingProject) {
@@ -2043,13 +2235,17 @@ function ProjectBlock({
     onToggleCollapsed(project.projectKey);
   }, [onToggleCollapsed, project.projectKey]);
 
+  const flatWorkspaces = useMemo(
+    () => flattenWorkspaceTree(project.workspaces),
+    [project.workspaces],
+  );
   let projectChildren = null;
   if (!collapsed) {
     if (project.workspaces.length > 0) {
       projectChildren = (
         <DraggableList
           testID={`sidebar-workspace-list-${project.projectKey}`}
-          data={project.workspaces}
+          data={flatWorkspaces}
           keyExtractor={workspaceKeyExtractor}
           renderItem={renderWorkspace}
           onDragEnd={handleWorkspaceDragEnd}
@@ -2095,10 +2291,21 @@ function ProjectBlock({
         menuController={null}
         onRemoveProject={handleRemoveProject}
         removeProjectStatus={isRemovingProject ? "pending" : "idle"}
+        onAddSubdirectory={handleOpenAddSubdirectory}
         dragHandleProps={dragHandleProps}
       />
 
       {projectChildren}
+      <AdaptiveRenameModal
+        visible={isSubdirPromptOpen}
+        title={t("sidebar.project.addSubdirectory.title")}
+        initialValue=""
+        placeholder={t("sidebar.project.addSubdirectory.placeholder")}
+        submitLabel={t("sidebar.project.addSubdirectory.create")}
+        onClose={handleCloseAddSubdirectory}
+        onSubmit={handleSubmitAddSubdirectory}
+        testID={`sidebar-project-add-subdirectory-modal-${project.projectKey}`}
+      />
     </View>
   );
 }

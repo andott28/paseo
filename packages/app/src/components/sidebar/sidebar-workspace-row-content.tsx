@@ -94,6 +94,7 @@ export function SidebarWorkspaceRowFrame({
 export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowContent({
   workspace,
   subtitle,
+  treeConnector,
   scriptIconKind = null,
   isHovered,
   isLoading,
@@ -104,6 +105,7 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
 }: {
   workspace: SidebarWorkspaceEntry;
   subtitle?: string | null;
+  treeConnector?: string | null;
   scriptIconKind?: SidebarWorkspaceScriptIconKind | null;
   isHovered: boolean;
   isLoading: boolean;
@@ -129,6 +131,11 @@ export const SidebarWorkspaceRowContent = memo(function SidebarWorkspaceRowConte
   return (
     <View style={styles.workspaceRowContent}>
       <View style={styles.workspaceRowMain}>
+        {treeConnector ? (
+          <Text style={styles.treeConnectorText} numberOfLines={1}>
+            {treeConnector}
+          </Text>
+        ) : null}
         <WorkspaceStatusIndicator
           bucket={workspace.statusBucket}
           workspaceKind={workspace.workspaceKind}
@@ -558,6 +565,14 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     lineHeight: 14,
+  },
+  treeConnectorText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    fontFamily: "monospace",
+    opacity: 0.5,
+    flexShrink: 0,
   },
   workspacePrBadgeRow: {
     flexDirection: "row",
