@@ -1,19 +1,26 @@
 import { useCallback, useMemo, type ReactElement, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { GestureResponderEvent } from "react-native";
 import { Plus, Server, Settings } from "lucide-react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { HostStatusDot } from "@/components/host-status-dot";
 import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/combobox";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import { useHostRuntimeSnapshot, type ActiveConnection } from "@/runtime/host-runtime";
 import { orderHostsLocalFirst } from "@/types/host-connection";
 import {
   ADD_HOST_OPTION_ID,
   ALL_HOSTS_OPTION_ID,
+  ENABLE_BUILT_IN_DAEMON_OPTION_ID,
   getHostPickerLabel,
 } from "./host-picker-constants";
 
-export { ADD_HOST_OPTION_ID, ALL_HOSTS_OPTION_ID, getHostPickerLabel };
+export {
+  ADD_HOST_OPTION_ID,
+  ALL_HOSTS_OPTION_ID,
+  ENABLE_BUILT_IN_DAEMON_OPTION_ID,
+  getHostPickerLabel,
+};
 
 const SEARCHABLE_THRESHOLD = 10;
 type RenderHostOption = NonNullable<ComboboxProps["renderOption"]>;
@@ -30,30 +37,48 @@ export function HostStatusDotSlot({ serverId }: { serverId: string }): ReactElem
   );
 }
 
+// Standard secure/plain web ports carry no information in the host display, so
+// "relay.paseo.sh:443" reads as "relay.paseo.sh" while "127.0.0.1:6767" is kept.
+function formatConnectionEndpoint(endpoint: string): string {
+  return endpoint.replace(/:(?:443|80)$/, "");
+}
+
+// Socket/pipe transports have no host:port — their endpoint is a filesystem
+// path, so they read as "Local". TCP and relay show the address being used.
+function formatActiveConnectionLabel(connection: ActiveConnection): string {
+  if (connection.type === "directSocket" || connection.type === "directPipe") {
+    return "Local";
+  }
+  return formatConnectionEndpoint(connection.endpoint);
+}
+
 export interface HostPickerOptionProps {
   serverId: string;
   label: string;
-  isLocal: boolean;
+  showActiveConnection: boolean;
   selected?: boolean;
   active: boolean;
   onPress: () => void;
   onOpenHostSettings?: (serverId: string) => void;
-  localMarkerTestID?: string;
   testID?: string;
 }
 
 export function HostPickerOption({
   serverId,
   label,
-  isLocal,
+  showActiveConnection,
   selected,
   active,
   onPress,
   onOpenHostSettings,
-  localMarkerTestID,
   testID,
 }: HostPickerOptionProps): ReactElement {
   const { theme } = useUnistyles();
+  const activeConnection = useHostRuntimeSnapshot(serverId)?.activeConnection ?? null;
+  const connectionLabel =
+    showActiveConnection && activeConnection
+      ? formatActiveConnectionLabel(activeConnection)
+      : undefined;
   const leadingSlot = useMemo(() => <HostStatusDotSlot serverId={serverId} />, [serverId]);
   const handleSettingsPress = useCallback(
     (event: GestureResponderEvent) => {
@@ -63,31 +88,20 @@ export function HostPickerOption({
     [onOpenHostSettings, serverId],
   );
   const trailingSlot = useMemo(() => {
-    if (!isLocal && !onOpenHostSettings) return undefined;
+    if (!onOpenHostSettings) return undefined;
     return (
-      <>
-        {isLocal ? (
-          <Text style={styles.localMarker} testID={localMarkerTestID}>
-            Local
-          </Text>
-        ) : null}
-        {onOpenHostSettings ? (
-          <Pressable
-            onPress={handleSettingsPress}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${label} settings`}
-          >
-            <Settings size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
-          </Pressable>
-        ) : null}
-      </>
+      <Pressable
+        onPress={handleSettingsPress}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${label} settings`}
+      >
+        <Settings size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
+      </Pressable>
     );
   }, [
     handleSettingsPress,
-    isLocal,
     label,
-    localMarkerTestID,
     onOpenHostSettings,
     theme.colors.foregroundMuted,
     theme.iconSize.sm,
@@ -96,6 +110,7 @@ export function HostPickerOption({
   return (
     <ComboboxItem
       label={label}
+      description={connectionLabel}
       leadingSlot={leadingSlot}
       trailingSlot={trailingSlot}
       selected={selected}
@@ -105,6 +120,12 @@ export function HostPickerOption({
     />
   );
 }
+
+const SYSTEM_HOST_PICKER_OPTION_LABELS: Record<"add" | "all" | "enableBuiltInDaemon", string> = {
+  add: "Add host",
+  all: "All hosts",
+  enableBuiltInDaemon: "Enable built-in daemon",
+};
 
 function SystemHostPickerOption({
   active,
@@ -116,12 +137,12 @@ function SystemHostPickerOption({
   active: boolean;
   selected?: boolean;
   onPress: () => void;
-  kind: "add" | "all";
+  kind: "add" | "all" | "enableBuiltInDaemon";
   testID?: string;
 }): ReactElement {
   const { theme } = useUnistyles();
   const Icon = kind === "add" ? Plus : Server;
-  const label = kind === "add" ? "Add host" : "All hosts";
+  const label = SYSTEM_HOST_PICKER_OPTION_LABELS[kind];
   const leadingSlot = useMemo(
     () => <Icon size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />,
     [Icon, theme.colors.foregroundMuted, theme.iconSize.sm],
@@ -149,15 +170,16 @@ export interface HostPickerProps {
   includeAllHost?: boolean;
   includeAddHost?: boolean;
   onAddHost?: () => void;
-  showLocalMarker?: boolean;
+  includeEnableBuiltInDaemon?: boolean;
+  onEnableBuiltInDaemon?: () => void;
+  showActiveConnection?: boolean;
   onOpenHostSettings?: (serverId: string) => void;
   searchable?: boolean;
   title?: string;
-  desktopPlacement?: "top-start" | "bottom-start";
+  desktopPlacement?: ComboboxProps["desktopPlacement"];
   desktopMinWidth?: number;
   addHostTestID?: string;
   hostOptionTestID?: (serverId: string) => string;
-  hostLocalMarkerTestID?: (serverId: string) => string;
   children: ReactNode;
 }
 
@@ -171,15 +193,16 @@ export function HostPicker({
   includeAllHost,
   includeAddHost,
   onAddHost,
-  showLocalMarker,
+  includeEnableBuiltInDaemon,
+  onEnableBuiltInDaemon,
+  showActiveConnection,
   onOpenHostSettings,
   searchable,
   title,
-  desktopPlacement = "top-start",
+  desktopPlacement = "bottom-start",
   desktopMinWidth,
   addHostTestID,
   hostOptionTestID,
-  hostLocalMarkerTestID,
   children,
 }: HostPickerProps): ReactElement {
   const localServerId = useLocalDaemonServerId();
@@ -192,8 +215,13 @@ export function HostPicker({
     const hostOptions = orderedHosts.map((host) => ({ id: host.serverId, label: host.label }));
     if (includeAllHost) hostOptions.unshift({ id: ALL_HOSTS_OPTION_ID, label: "All hosts" });
     if (includeAddHost) hostOptions.push({ id: ADD_HOST_OPTION_ID, label: "Add host" });
+    if (includeEnableBuiltInDaemon)
+      hostOptions.push({
+        id: ENABLE_BUILT_IN_DAEMON_OPTION_ID,
+        label: "Enable built-in daemon",
+      });
     return hostOptions;
-  }, [orderedHosts, includeAllHost, includeAddHost]);
+  }, [orderedHosts, includeAllHost, includeAddHost, includeEnableBuiltInDaemon]);
 
   const isSearchable = searchable === true && orderedHosts.length > SEARCHABLE_THRESHOLD;
 
@@ -201,12 +229,14 @@ export function HostPicker({
     (id: string) => {
       if (id === ADD_HOST_OPTION_ID) {
         onAddHost?.();
+      } else if (id === ENABLE_BUILT_IN_DAEMON_OPTION_ID) {
+        onEnableBuiltInDaemon?.();
       } else {
         onSelect(id);
       }
       onOpenChange(false);
     },
-    [onAddHost, onOpenChange, onSelect],
+    [onAddHost, onEnableBuiltInDaemon, onOpenChange, onSelect],
   );
 
   const handleOpenHostSettings = useCallback(
@@ -239,27 +269,29 @@ export function HostPicker({
           />
         );
       }
+      if (option.id === ENABLE_BUILT_IN_DAEMON_OPTION_ID) {
+        return (
+          <SystemHostPickerOption kind="enableBuiltInDaemon" active={active} onPress={onPress} />
+        );
+      }
       return (
         <HostPickerOption
           serverId={option.id}
           label={option.label}
-          isLocal={showLocalMarker === true && localServerId === option.id}
+          showActiveConnection={showActiveConnection === true}
           selected={selected}
           active={active}
           onPress={onPress}
           onOpenHostSettings={onOpenHostSettings ? handleOpenHostSettings : undefined}
-          localMarkerTestID={hostLocalMarkerTestID?.(option.id)}
           testID={hostOptionTestID?.(option.id)}
         />
       );
     },
     [
       addHostTestID,
-      hostLocalMarkerTestID,
       hostOptionTestID,
-      localServerId,
       onOpenHostSettings,
-      showLocalMarker,
+      showActiveConnection,
       handleOpenHostSettings,
     ],
   );
@@ -291,10 +323,5 @@ const styles = StyleSheet.create((theme) => ({
     height: theme.iconSize.sm,
     alignItems: "center",
     justifyContent: "center",
-  },
-  localMarker: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
-    marginLeft: theme.spacing[1],
   },
 }));

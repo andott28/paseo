@@ -102,7 +102,11 @@ import {
 } from "../provider-launch-config.js";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { appendOrReplaceGrowingAssistantMessage, runProviderTurn } from "./provider-runner.js";
-import { platformShell, spawnProcess } from "../../../utils/spawn.js";
+import {
+  buildStringCommandShellInvocation,
+  createStringCommandShellEnvOverlay,
+} from "../../../utils/string-command-shell.js";
+import { spawnProcess } from "../../../utils/spawn.js";
 import {
   type DiagnosticEntry,
   toDiagnosticErrorMessage,
@@ -181,7 +185,7 @@ function toACPRequestError(error: unknown): Error {
 function resolveTerminalCommand(
   command: string,
   args?: string[],
-): { command: string; args: string[] } {
+): { command: string; args: string[]; shell?: boolean } {
   if (args && args.length > 0) {
     return { command, args };
   }
@@ -190,8 +194,8 @@ function resolveTerminalCommand(
     return { command, args: [] };
   }
 
-  const shell = platformShell();
-  return { command: shell.command, args: [...shell.flag, command] };
+  const shell = buildStringCommandShellInvocation({ command, windowsShell: "cmd" });
+  return { command: shell.shell, args: shell.args, shell: false };
 }
 
 function formatDurationMs(startedAt: number): string {
@@ -225,13 +229,25 @@ export const DEFAULT_ACP_CAPABILITIES: AgentCapabilityFlags = {
   supportsRewindBoth: false,
 };
 
-const ACP_CLIENT_CAPABILITIES: ACPClientCapabilities = {
+const BASE_ACP_CLIENT_CAPABILITIES: ACPClientCapabilities = {
   fs: {
     readTextFile: true,
     writeTextFile: true,
   },
   terminal: true,
 };
+
+export type ACPClientCapabilityMeta = Record<string, unknown>;
+
+export function buildACPClientCapabilities(meta?: ACPClientCapabilityMeta): ACPClientCapabilities {
+  if (!meta || Object.keys(meta).length === 0) {
+    return BASE_ACP_CLIENT_CAPABILITIES;
+  }
+  return {
+    ...BASE_ACP_CLIENT_CAPABILITIES,
+    _meta: meta,
+  };
+}
 
 // Suppress interactive auth side-effects (e.g. Gemini CLI opening a Google
 // sign-in URL in the browser) when probing an ACP agent for models/modes.
@@ -334,6 +350,17 @@ export function createLoggedNdJsonStream(
   return { readable, writable };
 }
 
+// Lets a provider that publishes its slash commands through a vendor-specific
+// ACP extension notification (rather than the standard
+// `available_commands_update` session update) translate that payload into Paseo
+// slash commands, without the generic ACP session/client carrying any vendor
+// knowledge. Return the parsed commands (possibly empty) for a notification this
+// provider owns, or null to ignore notifications it does not handle.
+export type ACPExtensionCommandsParser = (
+  method: string,
+  params: Record<string, unknown>,
+) => AgentSlashCommand[] | null;
+
 interface ACPAgentClientOptions {
   provider: string;
   logger: Logger;
@@ -344,6 +371,7 @@ interface ACPAgentClientOptions {
   sessionResponseTransformer?: (response: SessionStateResponse) => SessionStateResponse;
   configOptionsTransformer?: (configOptions: SessionConfigOption[]) => SessionConfigOption[];
   configFeatureOptions?: ACPConfigFeatureOption[];
+  clientCapabilityMeta?: ACPClientCapabilityMeta;
   modeIdTransformer?: (modeId: string) => string | null;
   toolSnapshotTransformer?: (snapshot: ACPToolSnapshot) => ACPToolSnapshot;
   providerModeWriter?: (
@@ -356,6 +384,7 @@ interface ACPAgentClientOptions {
     thinkingOptionId: string,
   ) => Promise<void>;
   capabilities?: AgentCapabilityFlags;
+  extensionCommandsParser?: ACPExtensionCommandsParser;
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
   terminateProcess?: ProcessTerminator;
@@ -371,6 +400,7 @@ interface ACPAgentSessionOptions {
   sessionResponseTransformer?: (response: SessionStateResponse) => SessionStateResponse;
   configOptionsTransformer?: (configOptions: SessionConfigOption[]) => SessionConfigOption[];
   configFeatureOptions?: ACPConfigFeatureOption[];
+  clientCapabilityMeta?: ACPClientCapabilityMeta;
   modeIdTransformer?: (modeId: string) => string | null;
   toolSnapshotTransformer?: (snapshot: ACPToolSnapshot) => ACPToolSnapshot;
   providerModeWriter?: (
@@ -383,6 +413,7 @@ interface ACPAgentSessionOptions {
     thinkingOptionId: string,
   ) => Promise<void>;
   capabilities: AgentCapabilityFlags;
+  extensionCommandsParser?: ACPExtensionCommandsParser;
   handle?: AgentPersistenceHandle;
   agentId?: string;
   launchEnv?: Record<string, string>;
@@ -469,7 +500,7 @@ interface ConfigOptionSelector {
 export interface ACPConfigFeatureOption {
   id: string;
   configId: string;
-  category: string;
+  category?: string;
   label: string;
   description?: string;
   tooltip?: string;
@@ -677,6 +708,7 @@ export class ACPAgentClient implements AgentClient {
     configOptions: SessionConfigOption[],
   ) => SessionConfigOption[];
   private readonly configFeatureOptions: ACPConfigFeatureOption[];
+  private readonly clientCapabilityMeta?: ACPClientCapabilityMeta;
   private readonly modeIdTransformer?: (modeId: string) => string | null;
   private readonly toolSnapshotTransformer?: (snapshot: ACPToolSnapshot) => ACPToolSnapshot;
   private readonly providerModeWriter?: (
@@ -692,6 +724,7 @@ export class ACPAgentClient implements AgentClient {
   ) => Promise<void>;
   private readonly waitForInitialCommands: boolean;
   private readonly initialCommandsWaitTimeoutMs: number;
+  private readonly extensionCommandsParser?: ACPExtensionCommandsParser;
   protected readonly terminateProcess: ProcessTerminator;
 
   constructor(options: ACPAgentClientOptions) {
@@ -709,6 +742,7 @@ export class ACPAgentClient implements AgentClient {
     this.sessionResponseTransformer = options.sessionResponseTransformer;
     this.configOptionsTransformer = options.configOptionsTransformer;
     this.configFeatureOptions = options.configFeatureOptions ?? [];
+    this.clientCapabilityMeta = options.clientCapabilityMeta;
     this.modeIdTransformer = options.modeIdTransformer;
     this.toolSnapshotTransformer = options.toolSnapshotTransformer;
     this.providerModeWriter = options.providerModeWriter;
@@ -716,6 +750,7 @@ export class ACPAgentClient implements AgentClient {
     this.thinkingOptionWriter = options.thinkingOptionWriter;
     this.waitForInitialCommands = options.waitForInitialCommands ?? false;
     this.initialCommandsWaitTimeoutMs = options.initialCommandsWaitTimeoutMs ?? 1500;
+    this.extensionCommandsParser = options.extensionCommandsParser;
   }
 
   async createSession(
@@ -735,6 +770,7 @@ export class ACPAgentClient implements AgentClient {
         sessionResponseTransformer: this.sessionResponseTransformer,
         configOptionsTransformer: this.configOptionsTransformer,
         configFeatureOptions: this.configFeatureOptions,
+        clientCapabilityMeta: this.clientCapabilityMeta,
         modeIdTransformer: this.modeIdTransformer,
         toolSnapshotTransformer: this.toolSnapshotTransformer,
         providerModeWriter: this.providerModeWriter,
@@ -743,6 +779,7 @@ export class ACPAgentClient implements AgentClient {
         capabilities: this.capabilities,
         agentId: launchContext?.agentId,
         launchEnv: launchContext?.env,
+        extensionCommandsParser: this.extensionCommandsParser,
         waitForInitialCommands: this.waitForInitialCommands,
         initialCommandsWaitTimeoutMs: this.initialCommandsWaitTimeoutMs,
       },
@@ -782,6 +819,7 @@ export class ACPAgentClient implements AgentClient {
       sessionResponseTransformer: this.sessionResponseTransformer,
       configOptionsTransformer: this.configOptionsTransformer,
       configFeatureOptions: this.configFeatureOptions,
+      clientCapabilityMeta: this.clientCapabilityMeta,
       modeIdTransformer: this.modeIdTransformer,
       toolSnapshotTransformer: this.toolSnapshotTransformer,
       providerModeWriter: this.providerModeWriter,
@@ -791,6 +829,7 @@ export class ACPAgentClient implements AgentClient {
       handle,
       agentId: launchContext?.agentId,
       launchEnv: launchContext?.env,
+      extensionCommandsParser: this.extensionCommandsParser,
       waitForInitialCommands: this.waitForInitialCommands,
       initialCommandsWaitTimeoutMs: this.initialCommandsWaitTimeoutMs,
     });
@@ -1018,7 +1057,7 @@ export class ACPAgentClient implements AgentClient {
         Promise.race([
           transport.connection.initialize({
             protocolVersion: PROTOCOL_VERSION,
-            clientCapabilities: ACP_CLIENT_CAPABILITIES,
+            clientCapabilities: buildACPClientCapabilities(this.clientCapabilityMeta),
             clientInfo: { name: "Paseo", version: "dev" },
           }),
           transport.spawnError,
@@ -1230,6 +1269,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     configOptions: SessionConfigOption[],
   ) => SessionConfigOption[];
   private readonly configFeatureOptions: ACPConfigFeatureOption[];
+  private readonly clientCapabilityMeta?: ACPClientCapabilityMeta;
   private readonly modeIdTransformer?: (modeId: string) => string | null;
   private readonly toolSnapshotTransformer?: (snapshot: ACPToolSnapshot) => ACPToolSnapshot;
   private readonly providerModeWriter?: (
@@ -1273,6 +1313,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   private commandsReadySettled = false;
   private waitForInitialCommands: boolean;
   private initialCommandsWaitTimeoutMs: number;
+  private readonly extensionCommandsParser?: ACPExtensionCommandsParser;
   private currentTurnUsage: AgentUsage | undefined;
   private activeForegroundTurnId: string | null = null;
   private closed = false;
@@ -1293,6 +1334,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.sessionResponseTransformer = options.sessionResponseTransformer;
     this.configOptionsTransformer = options.configOptionsTransformer;
     this.configFeatureOptions = options.configFeatureOptions ?? [];
+    this.clientCapabilityMeta = options.clientCapabilityMeta;
     this.modeIdTransformer = options.modeIdTransformer;
     this.toolSnapshotTransformer = options.toolSnapshotTransformer;
     this.providerModeWriter = options.providerModeWriter;
@@ -1309,6 +1351,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     this.currentTitle = config.title ?? null;
     this.waitForInitialCommands = options.waitForInitialCommands ?? false;
     this.initialCommandsWaitTimeoutMs = options.initialCommandsWaitTimeoutMs ?? 1500;
+    this.extensionCommandsParser = options.extensionCommandsParser;
   }
 
   get id(): string | null {
@@ -1866,16 +1909,19 @@ export class ACPAgentSession implements AgentSession, ACPClient {
   }: {
     response: { configOptions: SessionConfigOption[] };
     configId: string;
-    category: string;
+    category?: string;
     requestedValue: string;
     label: string;
   }): string {
     this.configOptions = this.transformConfigOptions(response.configOptions);
-    const responseOption = findSelectConfigOption({
-      configOptions: this.configOptions,
-      category,
-      id: configId,
-    });
+    const responseOption =
+      category === undefined
+        ? findSelectConfigOptionById({ configOptions: this.configOptions, id: configId })
+        : findSelectConfigOption({
+            configOptions: this.configOptions,
+            category,
+            id: configId,
+          });
     if (responseOption?.currentValue != null) {
       return responseOption.currentValue;
     }
@@ -2081,6 +2127,39 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       },
       "provider.acp.extension_notification",
     );
+
+    const parsedCommands = this.extensionCommandsParser?.(method, params);
+    if (parsedCommands) {
+      this.applyResolvedCommands(parsedCommands, {
+        sessionId: typeof params.sessionId === "string" ? params.sessionId : undefined,
+      });
+    }
+  }
+
+  // Cache an asynchronously-delivered slash-command batch and unblock any
+  // listCommands() call that is waiting on the initial batch. Used when a
+  // provider supplies an extensionCommandsParser whose result arrives after
+  // session/new (e.g. via a vendor extension notification). The ready gate is
+  // always settled — even for an empty batch — so a provider that legitimately
+  // reports no commands does not leave listCommands() blocked for the full
+  // initial-commands timeout. An optional sessionId scopes the batch to this
+  // session; notifications addressed to a different session are ignored.
+  private applyResolvedCommands(
+    commands: AgentSlashCommand[],
+    options?: { sessionId?: string },
+  ): void {
+    if (
+      options?.sessionId !== undefined &&
+      this.sessionId !== null &&
+      options.sessionId !== this.sessionId
+    ) {
+      return;
+    }
+
+    if (commands.length > 0) {
+      this.cachedCommands = commands;
+    }
+    this.settleCommandsReady();
   }
 
   async readTextFile(params: ReadTextFileRequest): Promise<{ content: string }> {
@@ -2106,12 +2185,15 @@ export class ACPAgentSession implements AgentSession, ACPClient {
       (params.env ?? []).map((entry: EnvVariable) => [entry.name, entry.value]),
     );
     const terminalCommand = resolveTerminalCommand(params.command, params.args);
+    const commandEnvOverlays =
+      terminalCommand.shell === false ? [env, createStringCommandShellEnvOverlay()] : [env];
     const child = spawnProcess(terminalCommand.command, terminalCommand.args, {
       cwd: params.cwd ?? this.config.cwd,
       ...createProviderEnvSpec({
         runtimeSettings: this.runtimeSettings,
-        overlays: [env],
+        overlays: commandEnvOverlays,
       }),
+      shell: terminalCommand.shell,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -2237,7 +2319,7 @@ export class ACPAgentSession implements AgentSession, ACPClient {
     const initialize = await this.runACPRequest(() =>
       connection.initialize({
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: ACP_CLIENT_CAPABILITIES,
+        clientCapabilities: buildACPClientCapabilities(this.clientCapabilityMeta),
         clientInfo: { name: "Paseo", version: "dev" },
       }),
     );
@@ -2702,6 +2784,19 @@ function findSelectConfigOption({
   return option ?? null;
 }
 
+function findSelectConfigOptionById({
+  configOptions,
+  id,
+}: {
+  configOptions: SessionConfigOption[] | null | undefined;
+  id: string;
+}): SelectConfigOption | null {
+  const option = configOptions?.find(
+    (entry): entry is SelectConfigOption => entry.type === "select" && entry.id === id,
+  );
+  return option ?? null;
+}
+
 function findSelectConfigFeatureOption(
   configOptions: SessionConfigOption[] | null | undefined,
   featureOption: ACPConfigFeatureOption,
@@ -2710,7 +2805,7 @@ function findSelectConfigFeatureOption(
     (entry): entry is SelectConfigOption =>
       entry.type === "select" &&
       entry.id === featureOption.configId &&
-      entry.category === featureOption.category,
+      (featureOption.category === undefined || entry.category === featureOption.category),
   );
   return option ?? null;
 }

@@ -2,13 +2,13 @@ import type { PrHint } from "@/git/pr-hint";
 import { selectPrHintFromStatus } from "@/git/pr-hint";
 import { type HostProjectListItem } from "@/projects/host-project-model";
 import type { PendingCreateAttempt } from "@/stores/create-flow-store";
-import type { Agent, WorkspaceDescriptor } from "@/stores/session-store";
+import type { WorkspaceDescriptor } from "@/stores/session-store";
 import type {
   WorkspaceStructureHostPlacement,
   WorkspaceStructureProject,
 } from "@/projects/workspace-structure";
 import { projectDisplayNameFromProjectId } from "@/utils/project-display-name";
-import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
+import type { WorkspaceAgentActivity } from "@/utils/workspace-agent-activity";
 import { resolveWorkspaceMapKeyByIdentity } from "@/utils/workspace-identity";
 
 const EMPTY_PROJECTS: SidebarProjectEntry[] = [];
@@ -71,15 +71,13 @@ export interface SidebarWorkspacePlacementModel {
 export interface SidebarStatusWorkspaceSession {
   serverId: string;
   workspaces: Map<string, WorkspaceDescriptor>;
-  agents?: Map<string, Agent>;
+  workspaceAgentActivity: Map<string, WorkspaceAgentActivity>;
 }
 
 interface EffectiveWorkspaceStatus {
   status: WorkspaceDescriptor["status"];
   enteredAt: Date | null;
 }
-
-interface WorkspaceAgentActivity extends EffectiveWorkspaceStatus {}
 
 function projectNameForWorkspace(workspace: WorkspaceDescriptor, projectKey: string): string {
   return (
@@ -101,7 +99,7 @@ export function createSidebarWorkspaceEntry(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-  agents?: Map<string, Agent>;
+  workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
 }): SidebarWorkspaceEntry {
   const projectKey = input.workspace.project?.projectKey ?? input.workspace.projectId;
   const effectiveStatus = deriveEffectiveWorkspaceStatus(input);
@@ -135,7 +133,7 @@ function deriveEffectiveWorkspaceStatus(input: {
   serverId: string;
   workspace: WorkspaceDescriptor;
   pendingCreateAttempts?: Record<string, PendingCreateAttempt>;
-  agents?: Map<string, Agent>;
+  workspaceAgentActivity?: ReadonlyMap<string, WorkspaceAgentActivity>;
 }): EffectiveWorkspaceStatus {
   if (input.workspace.status !== "done") {
     return { status: input.workspace.status, enteredAt: input.workspace.statusEnteredAt };
@@ -150,10 +148,7 @@ function deriveEffectiveWorkspaceStatus(input: {
     return { status: "running", enteredAt: pendingStartedAt };
   }
 
-  const rootAgentActivity = getRootAgentWorkspaceActivity({
-    workspace: input.workspace,
-    agents: input.agents,
-  });
+  const rootAgentActivity = input.workspaceAgentActivity?.get(input.workspace.id);
   if (rootAgentActivity && rootAgentActivity.status !== "done") {
     return rootAgentActivity;
   }
@@ -177,28 +172,6 @@ function getPendingInitialAgentCreateStartedAt(input: {
     }
   }
   return latestStartedAt;
-}
-
-function getRootAgentWorkspaceActivity(input: {
-  workspace: WorkspaceDescriptor;
-  agents?: Map<string, Agent>;
-}): WorkspaceAgentActivity | null {
-  let latest: WorkspaceAgentActivity | null = null;
-  for (const agent of input.agents?.values() ?? []) {
-    if (agent.archivedAt || agent.parentAgentId) continue;
-    if (agent.workspaceId !== input.workspace.id) continue;
-    const status = deriveSidebarStateBucket({
-      status: agent.status,
-      pendingPermissionCount: agent.pendingPermissions.length,
-      requiresAttention: agent.requiresAttention,
-      attentionReason: agent.attentionReason,
-    });
-    const enteredAt = agent.attentionTimestamp ?? agent.updatedAt;
-    if (!latest || enteredAt > (latest.enteredAt ?? new Date(0))) {
-      latest = { status, enteredAt };
-    }
-  }
-  return latest;
 }
 
 export function buildSidebarWorkspacePlacementModel(input: {
@@ -306,7 +279,7 @@ export function buildSidebarStatusWorkspacePlacements(input: {
       serverId: placement.serverId,
       workspace,
       pendingCreateAttempts: input.pendingCreateAttempts,
-      agents: session.agents,
+      workspaceAgentActivity: session.workspaceAgentActivity,
     });
 
     rows.push({
@@ -357,6 +330,20 @@ export function buildSidebarProjectsFromHostProjects(input: {
       }),
     ),
   }));
+}
+
+// Host labels disambiguate which machine a workspace lives on; they only earn their
+// space once the visible sidebar spans more than one host. Counting distinct hosts
+// across the visible projects (not all connected hosts) keeps labels off when a host
+// filter pins the view to a single host.
+export function shouldShowSidebarHostLabels(projects: SidebarProjectEntry[]): boolean {
+  const serverIds = new Set<string>();
+  for (const project of projects) {
+    for (const host of project.hosts) {
+      serverIds.add(host.serverId);
+    }
+  }
+  return serverIds.size >= 2;
 }
 
 export function applyStoredOrdering<T>(input: {

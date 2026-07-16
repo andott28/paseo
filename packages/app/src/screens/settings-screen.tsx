@@ -39,7 +39,8 @@ import { AppDiagnosticSheet } from "@/components/app-diagnostic-sheet";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { SidebarHeaderRow } from "@/components/sidebar/sidebar-header-row";
 import { SidebarSeparator } from "@/components/sidebar/sidebar-separator";
-import { HostPicker as SharedHostPicker, HostStatusDotSlot } from "@/components/hosts/host-picker";
+import { HostPicker as SharedHostPicker } from "@/components/hosts/host-picker";
+import { HostStatusDot } from "@/components/host-status-dot";
 import { ScreenTitle } from "@/components/headers/screen-title";
 import { HeaderIconBadge } from "@/components/headers/header-icon-badge";
 import { SettingsSection } from "@/screens/settings/settings-section";
@@ -71,7 +72,6 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import { IntegrationsSection } from "@/desktop/components/integrations-section";
-import { LocalDaemonSection } from "@/desktop/components/desktop-updates-section";
 import { isElectronRuntime } from "@/desktop/host";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
@@ -99,6 +99,10 @@ import ProjectsScreen from "@/screens/projects-screen";
 import ProjectSettingsScreen from "@/screens/project-settings-screen";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLocalDaemonServerId } from "@/hooks/use-is-local-daemon";
+import {
+  type EnableBuiltInDaemonOption,
+  useEnableBuiltInDaemonOption,
+} from "@/desktop/hooks/use-enable-built-in-daemon-option";
 import { useWebScrollbarStyle } from "@/hooks/use-web-scrollbar-style";
 import {
   buildOpenProjectRoute,
@@ -130,7 +134,6 @@ interface SidebarSectionItem {
 
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
-  { id: "daemon", labelKey: "settings.sections.daemon", icon: Server, desktopOnly: true },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
   {
@@ -156,13 +159,13 @@ interface HostSectionItem {
 }
 
 const HOST_SECTION_ITEMS: HostSectionItem[] = [
+  { id: "host", labelKey: "settings.hostSections.host", icon: Server },
   { id: "connections", labelKey: "settings.hostSections.connections", icon: Network },
   { id: "agents", labelKey: "settings.hostSections.agents", icon: Bot },
   { id: "workspaces", labelKey: "settings.hostSections.workspaces", icon: FolderGit2 },
   { id: "providers", labelKey: "settings.hostSections.providers", icon: Boxes },
   { id: "usage", labelKey: "settings.hostSections.usage", icon: Gauge },
   { id: "terminals", labelKey: "settings.hostSections.terminals", icon: SquareTerminal },
-  { id: "host", labelKey: "settings.hostSections.host", icon: Server },
 ];
 
 function renderHostSettingsContent(
@@ -700,6 +703,9 @@ function DesktopAppUpdateRow() {
       });
   }, [installUpdate, isDesktopApp, t]);
 
+  const isUpdateReady = availableUpdate?.readyToInstall === true;
+  const readyUpdateVersion = isUpdateReady ? availableUpdate?.latestVersion : null;
+
   if (!isDesktopApp) {
     return null;
   }
@@ -724,10 +730,10 @@ function DesktopAppUpdateRow() {
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.about.updates.label")}</Text>
           <Text style={settingsStyles.rowHint}>{statusText}</Text>
-          {availableUpdate?.latestVersion ? (
+          {readyUpdateVersion ? (
             <Text style={settingsStyles.rowHint}>
               {t("settings.about.updates.readyToInstall", {
-                version: formatVersionWithPrefix(availableUpdate.latestVersion),
+                version: formatVersionWithPrefix(readyUpdateVersion),
               })}
             </Text>
           ) : null}
@@ -746,9 +752,9 @@ function DesktopAppUpdateRow() {
             variant="default"
             size="sm"
             onPress={handleInstallUpdate}
-            disabled={isChecking || isInstalling || !availableUpdate}
+            disabled={isChecking || isInstalling || !isUpdateReady}
           >
-            {getUpdateButtonLabel(t, isInstalling, availableUpdate?.latestVersion)}
+            {getUpdateButtonLabel(t, isInstalling, readyUpdateVersion)}
           </Button>
         </View>
       </View>
@@ -889,15 +895,23 @@ interface HostPickerProps {
   sortedHosts: HostProfile[];
   onSelectHost: (serverId: string) => void;
   onAddHost: () => void;
+  enableBuiltInDaemonOption: EnableBuiltInDaemonOption;
 }
 
 /**
  * Scopes the four host sections to a host. Reuses the canonical sidebar host
  * switcher pattern (left-sidebar.tsx): a quiet row-styled trigger opening a
- * <Combobox>. The local host is listed first and tagged "Local"; an "Add host"
- * row is always reachable from the list — even with a single host.
+ * <Combobox>. The local host is listed first, each row shows the connection it
+ * is using right now; an "Add host" row is always reachable from the list —
+ * even with a single host.
  */
-function HostPicker({ activeServerId, sortedHosts, onSelectHost, onAddHost }: HostPickerProps) {
+function HostPicker({
+  activeServerId,
+  sortedHosts,
+  onSelectHost,
+  onAddHost,
+  enableBuiltInDaemonOption,
+}: HostPickerProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<View | null>(null);
@@ -905,7 +919,6 @@ function HostPicker({ activeServerId, sortedHosts, onSelectHost, onAddHost }: Ho
     sortedHosts.find((host) => host.serverId === activeServerId) ?? sortedHosts[0] ?? null;
 
   const handleOpen = useCallback(() => setIsOpen(true), []);
-  const hostLocalMarkerTestID = useCallback(() => "settings-host-local-marker", []);
   const hostOptionTestID = useCallback(
     (serverId: string) => `settings-host-picker-item-${serverId}`,
     [],
@@ -928,23 +941,29 @@ function HostPicker({ activeServerId, sortedHosts, onSelectHost, onAddHost }: Ho
       anchorRef={triggerRef}
       includeAddHost
       onAddHost={onAddHost}
-      showLocalMarker
+      includeEnableBuiltInDaemon={enableBuiltInDaemonOption.visible}
+      onEnableBuiltInDaemon={enableBuiltInDaemonOption.onPress}
+      showActiveConnection
       searchable={false}
       title={t("settings.hostPicker.switchHost")}
       desktopMinWidth={240}
       addHostTestID="settings-add-host"
-      hostLocalMarkerTestID={hostLocalMarkerTestID}
       hostOptionTestID={hostOptionTestID}
     >
       <ComboboxTrigger
         ref={triggerRef}
+        block
         style={triggerStyle}
         onPress={handleOpen}
         accessibilityRole="button"
         accessibilityLabel={t("settings.hostPicker.switchHost")}
         testID="settings-host-picker"
       >
-        {activeHost ? <HostStatusDotSlot serverId={activeHost.serverId} /> : null}
+        {activeHost ? (
+          <View style={sidebarStyles.pickerTriggerDot}>
+            <HostStatusDot serverId={activeHost.serverId} />
+          </View>
+        ) : null}
         <Text style={sidebarStyles.pickerTriggerLabel} numberOfLines={1}>
           {activeHost?.label ?? t("settings.groups.host")}
         </Text>
@@ -982,6 +1001,7 @@ function SettingsSidebar({
   const localServerId = useLocalDaemonServerId();
   const sortedHosts = useSortedHosts(hosts, localServerId);
   const hasHosts = sortedHosts.length > 0;
+  const enableBuiltInDaemonOption = useEnableBuiltInDaemonOption();
   const isDesktopApp = isElectronRuntime();
   const items = SIDEBAR_SECTION_ITEMS.filter((item) => !item.desktopOnly || isDesktopApp);
   const insets = useSafeAreaInsets();
@@ -1028,6 +1048,7 @@ function SettingsSidebar({
             sortedHosts={sortedHosts}
             onSelectHost={onSelectHost}
             onAddHost={onAddHost}
+            enableBuiltInDaemonOption={enableBuiltInDaemonOption}
           />
           {HOST_SECTION_ITEMS.map((item) => (
             <SidebarHostSectionButton
@@ -1054,6 +1075,20 @@ function SettingsSidebar({
               {t("settings.addHost")}
             </Text>
           </Pressable>
+          {enableBuiltInDaemonOption.visible ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("settings.enableBuiltInDaemon")}
+              onPress={enableBuiltInDaemonOption.onPress}
+              testID="settings-enable-built-in-daemon"
+              style={sidebarItemStyle}
+            >
+              <Server size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+              <Text style={sidebarStyles.label} numberOfLines={1}>
+                {t("settings.enableBuiltInDaemon")}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
     </>
@@ -1379,8 +1414,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
               handleTerminalScrollbackLinesChange={handleTerminalScrollbackLinesChange}
             />
           );
-        case "daemon":
-          return <LocalDaemonSection />;
         case "appearance":
           return <AppearanceSection />;
         case "shortcuts":
@@ -1707,5 +1740,12 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
     fontWeight: theme.fontWeight.normal,
+  },
+  // Match the setting items' icon footprint so the host label aligns with them.
+  pickerTriggerDot: {
+    width: theme.iconSize.md,
+    height: theme.iconSize.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
 }));

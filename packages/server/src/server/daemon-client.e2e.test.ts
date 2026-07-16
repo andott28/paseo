@@ -1,5 +1,5 @@
 import { test, expect, beforeAll, afterAll } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
@@ -197,12 +197,12 @@ test("createAgent with background initialPrompt returns a running snapshot befor
 
     expect(agent.status).toBe("running");
 
-    const fetchedWhileRunning = await client.fetchAgent(agent.id);
+    const fetchedWhileRunning = await client.fetchAgent({ agentId: agent.id });
     expect(fetchedWhileRunning?.agent.status).toBe("running");
 
     await new Promise((resolve) => setTimeout(resolve, 350));
 
-    const fetchedAfterCompletion = await client.fetchAgent(agent.id);
+    const fetchedAfterCompletion = await client.fetchAgent({ agentId: agent.id });
     expect(fetchedAfterCompletion?.agent.status).toBe("idle");
   } finally {
     await client.close();
@@ -547,7 +547,9 @@ beforeAll(async () => {
 
   ctx = await createDaemonTestContext({
     dictationFinalTimeoutMs: 5000,
-    ...(openaiApiKey ? { openai: { apiKey: openaiApiKey } } : {}),
+    ...(openaiApiKey
+      ? { openai: { stt: { apiKey: openaiApiKey }, tts: { apiKey: openaiApiKey } } }
+      : {}),
     ...(speechConfig ? { speech: speechConfig } : {}),
   });
 }, 60000);
@@ -638,7 +640,7 @@ test("interrupts a running agent before archiving", async () => {
     const result = await ctx.client.archiveAgent(created.id);
     expect(result.archivedAt).toBeTruthy();
 
-    const archivedResult = await ctx.client.fetchAgent(created.id);
+    const archivedResult = await ctx.client.fetchAgent({ agentId: created.id });
     expect(archivedResult).not.toBeNull();
     expect(archivedResult?.agent.archivedAt).toBeTruthy();
     expect(archivedResult?.agent.status).not.toBe("running");
@@ -671,7 +673,7 @@ test("send_agent_message auto-unarchives archived agents", async () => {
     const finalState = await ctx.client.waitForFinish(created.id, 120000);
     expect(finalState.status).toBe("idle");
 
-    const refreshed = await ctx.client.fetchAgent(created.id);
+    const refreshed = await ctx.client.fetchAgent({ agentId: created.id });
     expect(refreshed).not.toBeNull();
     expect(refreshed?.agent.archivedAt).toBeNull();
   } finally {
@@ -691,7 +693,7 @@ test("refresh_agent auto-unarchives archived agents", async () => {
     await ctx.client.archiveAgent(created.id);
     await ctx.client.refreshAgent(created.id);
 
-    const refreshed = await ctx.client.fetchAgent(created.id);
+    const refreshed = await ctx.client.fetchAgent({ agentId: created.id });
     expect(refreshed).not.toBeNull();
     expect(refreshed?.agent.archivedAt).toBeNull();
   } finally {
@@ -770,7 +772,7 @@ test("resume_agent auto-unarchives archived agents", async () => {
         cwd,
       },
     });
-    const agentBeforeArchive = await ctx.client.fetchAgent(created.id);
+    const agentBeforeArchive = await ctx.client.fetchAgent({ agentId: created.id });
     expect(agentBeforeArchive?.agent.persistence).toBeTruthy();
     await ctx.client.archiveAgent(created.id);
 
@@ -779,7 +781,7 @@ test("resume_agent auto-unarchives archived agents", async () => {
       throw new Error("Expected persistence handle for resume test");
     }
     const resumed = await ctx.client.resumeAgent(handle);
-    const resumedDetails = await ctx.client.fetchAgent(resumed.id);
+    const resumedDetails = await ctx.client.fetchAgent({ agentId: resumed.id });
     expect(resumedDetails).not.toBeNull();
     expect(resumedDetails?.agent.archivedAt).toBeNull();
 
@@ -807,7 +809,7 @@ test("update_agent persists unloaded title and labels across auto-unarchive", as
       labels: { lane: "phase-1a" },
     });
 
-    const archived = await ctx.client.fetchAgent(created.id);
+    const archived = await ctx.client.fetchAgent({ agentId: created.id });
     expect(archived).not.toBeNull();
     expect(archived?.agent.archivedAt).toBeTruthy();
     expect(archived?.agent.title).toBe("Pinned Title");
@@ -817,7 +819,7 @@ test("update_agent persists unloaded title and labels across auto-unarchive", as
     const finalState = await ctx.client.waitForFinish(created.id, 120000);
     expect(finalState.status).toBe("idle");
 
-    const unarchived = await ctx.client.fetchAgent(created.id);
+    const unarchived = await ctx.client.fetchAgent({ agentId: created.id });
     expect(unarchived).not.toBeNull();
     expect(unarchived?.agent.archivedAt).toBeNull();
     expect(unarchived?.agent.title).toBe("Pinned Title");
@@ -829,6 +831,7 @@ test("update_agent persists unloaded title and labels across auto-unarchive", as
 
 test("returns home-scoped directory suggestions", async () => {
   const insideHomeDir = mkdtempSync(path.join(homedir(), "paseo-dir-suggestion-"));
+  const rootBrowseDir = mkdtempSync(path.join(homedir(), "000-paseo-root-browse-"));
   const outsideHomeDir = mkdtempSync(path.join(tmpdir(), "paseo-dir-suggestion-outside-"));
 
   try {
@@ -840,6 +843,17 @@ test("returns home-scoped directory suggestions", async () => {
     expect(insideResult.error).toBeNull();
     expect(insideResult.directories).toContain(insideHomeDir);
 
+    const rootBrowseResult = await ctx.client.getDirectorySuggestions({
+      query: "~",
+      limit: 100,
+    });
+    expect(rootBrowseResult.error).toBeNull();
+    expect(rootBrowseResult.directories).toContain(rootBrowseDir);
+
+    const blankResult = await ctx.client.getDirectorySuggestions({ query: "", limit: 100 });
+    expect(blankResult.error).toBeNull();
+    expect(blankResult.entries).toEqual([]);
+
     const outsideQuery = path.basename(outsideHomeDir);
     const outsideResult = await ctx.client.getDirectorySuggestions({
       query: outsideQuery,
@@ -849,7 +863,32 @@ test("returns home-scoped directory suggestions", async () => {
     expect(outsideResult.directories).not.toContain(outsideHomeDir);
   } finally {
     rmSync(insideHomeDir, { recursive: true, force: true });
+    rmSync(rootBrowseDir, { recursive: true, force: true });
     rmSync(outsideHomeDir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("returns typed relative suggestions within a requested directory", async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "paseo-workspace-suggestion-"));
+  const target = path.join(cwd, "src", "components", "message-renderer.tsx");
+
+  try {
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, "");
+
+    const result = await ctx.client.getDirectorySuggestions({
+      cwd,
+      query: "msgrndr",
+      includeFiles: true,
+      includeDirectories: false,
+      limit: 20,
+    });
+
+    expect(result.error).toBeNull();
+    expect(result.directories).toEqual([]);
+    expect(result.entries).toEqual([{ path: "src/components/message-renderer.tsx", kind: "file" }]);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
   }
 }, 30000);
 
@@ -974,7 +1013,7 @@ test("creates agent and exercises lifecycle", async () => {
 
   expect(agent.id).toBeTruthy();
   expect(agent.status).toBe("idle");
-  const fetchedResult = await ctx.client.fetchAgent(agent.id);
+  const fetchedResult = await ctx.client.fetchAgent({ agentId: agent.id });
   expect(fetchedResult?.agent.id).toBe(agent.id);
 
   const agentUpdate = await agentUpdatePromise;
@@ -1149,7 +1188,10 @@ test("creates agent and exercises lifecycle", async () => {
     return unsubscribeCommands;
   });
 
-  const commands = await ctx.client.listCommands(agent.id, commandsRequestId);
+  const commands = await ctx.client.listCommands({
+    agentId: agent.id,
+    requestId: commandsRequestId,
+  });
   const commandsMessage = await commandsResponsePromise;
   expect(commands.agentId).toBe(agent.id);
   expect(Array.isArray(commands.commands)).toBe(true);

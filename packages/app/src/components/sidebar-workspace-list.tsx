@@ -38,17 +38,13 @@ import { type GestureType } from "react-native-gesture-handler";
 import * as Clipboard from "expo-clipboard";
 import { DiffStat } from "@/components/diff-stat";
 import {
-  Archive,
   CircleAlert,
-  CircleCheck,
   ChevronDown,
   ChevronRight,
-  Copy,
   ExternalLink,
   GitPullRequest,
   Settings,
   MoreVertical,
-  Pencil,
   Plus,
   Trash2,
 } from "lucide-react-native";
@@ -56,6 +52,7 @@ import { NestableScrollContainer } from "react-native-draggable-flatlist";
 import { DraggableList, type DraggableRenderItemInfo } from "./draggable-list";
 import type { DraggableListDragHandleProps } from "./draggable-list.types";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { useHostFeatureMap } from "@/runtime/host-features";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
 import {
@@ -64,9 +61,9 @@ import {
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 import {
+  shouldShowSidebarHostLabels,
   useSidebarWorkspaceEntry,
   type SidebarProjectEntry,
-  type SidebarStatusWorkspacePlacement,
   type SidebarWorkspaceEntry,
   type SidebarWorkspacePlacement,
 } from "@/hooks/use-sidebar-workspaces-list";
@@ -91,6 +88,8 @@ import { shouldRenderSyncedStatusLoader } from "@/utils/status-loader";
 import { isEmphasizedStatusDotBucket } from "@/utils/status-dot-color";
 import type { SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { SidebarStatusWorkspaceList } from "@/components/sidebar/sidebar-status-list";
+import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
+import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import {
   SidebarWorkspaceRowFrame,
   SidebarWorkspaceRowContent,
@@ -197,15 +196,11 @@ const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
-const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedSyncedLoader = withUnistyles(SyncedLoader);
 const ThemedPlus = withUnistyles(Plus);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedTrash2 = withUnistyles(Trash2);
 const ThemedSettings = withUnistyles(Settings);
-const ThemedCopy = withUnistyles(Copy);
-const ThemedArchive = withUnistyles(Archive);
-const ThemedPencil = withUnistyles(Pencil);
 
 const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
@@ -283,7 +278,7 @@ function selectionForSelectedWorkspace(
 }
 
 interface SidebarWorkspaceListProps {
-  statusWorkspacePlacements: SidebarStatusWorkspacePlacement[];
+  statusGroups: StatusGroup[];
   projects: SidebarProjectEntry[];
   projectNamesByKey: Map<string, string>;
   collapsedProjectKeys: ReadonlySet<string>;
@@ -415,12 +410,6 @@ function projectKebabStyle({
   hovered = false,
 }: PressableStateCallbackType & { hovered?: boolean }) {
   return [styles.projectKebabButton, hovered && styles.projectKebabButtonHovered];
-}
-
-function workspaceKebabStyle({
-  hovered = false,
-}: PressableStateCallbackType & { hovered?: boolean }) {
-  return [styles.kebabButton, hovered && styles.kebabButtonHovered];
 }
 
 function getProjectWorkspaceRowStyle({
@@ -602,12 +591,6 @@ function ProjectRowTrailingActions({
 
 const trash2LeadingIcon = <ThemedTrash2 size={14} uniProps={foregroundMutedColorMapping} />;
 const settingsLeadingIcon = <ThemedSettings size={14} uniProps={foregroundMutedColorMapping} />;
-const copyLeadingIcon = <ThemedCopy size={14} uniProps={foregroundMutedColorMapping} />;
-const markAsReadLeadingIcon = (
-  <ThemedCircleCheck size={14} uniProps={foregroundMutedColorMapping} />
-);
-const archiveLeadingIcon = <ThemedArchive size={14} uniProps={foregroundMutedColorMapping} />;
-const renameLeadingIcon = <ThemedPencil size={14} uniProps={foregroundMutedColorMapping} />;
 const openInNewWindowLeadingIcon = (
   <ThemedExternalLink size={14} uniProps={foregroundMutedColorMapping} />
 );
@@ -770,7 +753,7 @@ function WorkspaceRowRightGroup({
           </SidebarWorkspaceTrailingActionBase>
           <SidebarWorkspaceTrailingActionOverlay visible={showKebabInSlot}>
             {onArchive ? (
-              <WorkspaceKebabMenu
+              <SidebarWorkspaceMenu
                 workspaceKey={workspace.workspaceKey}
                 onCopyPath={onCopyPath}
                 onCopyBranchName={onCopyBranchName}
@@ -2033,6 +2016,8 @@ function ProjectBlock({
   creatingWorkspaceIds,
   activeWorkspaceSelection,
   hostLabelByServerId,
+  showHostLabels,
+  supportsMultiplicityByServerId,
 }: {
   project: SidebarProjectEntry;
   collapsed: boolean;
@@ -2053,14 +2038,17 @@ function ProjectBlock({
   creatingWorkspaceIds: ReadonlySet<string>;
   activeWorkspaceSelection: ActiveWorkspaceSelection | null;
   hostLabelByServerId: ReadonlyMap<string, string>;
+  showHostLabels: boolean;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
 }) {
   const rowModel = useMemo(
     () =>
       buildSidebarProjectRowModel({
         project,
         collapsed,
+        supportsMultiplicityByServerId,
       }),
-    [collapsed, project],
+    [collapsed, project, supportsMultiplicityByServerId],
   );
 
   const active = isProjectSelectedByRoute({
@@ -2082,9 +2070,7 @@ function ProjectBlock({
         <MemoWorkspaceRowItem
           workspace={item}
           subtitle={
-            project.hosts.length > 1
-              ? (hostLabelByServerId.get(item.serverId) ?? item.serverId)
-              : null
+            showHostLabels ? (hostLabelByServerId.get(item.serverId) ?? item.serverId) : null
           }
           shortcutNumber={shortcutIndexByWorkspaceKey.get(item.workspaceKey) ?? null}
           showShortcutBadge={showShortcutBadges}
@@ -2101,7 +2087,7 @@ function ProjectBlock({
     },
     [
       project.projectKind,
-      project.hosts.length,
+      showHostLabels,
       activeWorkspaceSelection,
       creatingWorkspaceIds,
       hostLabelByServerId,
@@ -2257,7 +2243,7 @@ function ProjectBlock({
           containerStyle={styles.workspaceListContainer}
         />
       );
-    } else if (rowModel.trailingAction.kind === "new_worktree") {
+    } else if (rowModel.trailingAction.kind === "new_workspace") {
       projectChildren = (
         <NewWorkspaceGhostRow
           project={project}
@@ -2280,7 +2266,7 @@ function ProjectBlock({
         chevron={rowModel.chevron}
         onPress={handleToggleCollapsed}
         worktreeTarget={
-          rowModel.trailingAction.kind === "new_worktree" ? rowModel.trailingAction.target : null
+          rowModel.trailingAction.kind === "new_workspace" ? rowModel.trailingAction.target : null
         }
         isProjectActive={active}
         onWorkspacePress={onWorkspacePress}
@@ -2312,6 +2298,7 @@ function ProjectBlock({
 
 type ProjectBlockProps = Parameters<typeof ProjectBlock>[0];
 
+// oxlint-disable-next-line complexity
 function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlockProps): boolean {
   return (
     previous.project === next.project &&
@@ -2322,6 +2309,8 @@ function areProjectBlockPropsEqual(previous: ProjectBlockProps, next: ProjectBlo
     previous.showShortcutBadges === next.showShortcutBadges &&
     previous.shortcutIndexByWorkspaceKey === next.shortcutIndexByWorkspaceKey &&
     previous.hostLabelByServerId === next.hostLabelByServerId &&
+    previous.showHostLabels === next.showHostLabels &&
+    previous.supportsMultiplicityByServerId === next.supportsMultiplicityByServerId &&
     previous.parentGestureRef === next.parentGestureRef &&
     previous.onToggleCollapsed === next.onToggleCollapsed &&
     previous.onWorkspacePress === next.onWorkspacePress &&
@@ -2365,7 +2354,7 @@ function areProjectBlockSelectionsEqual(
 const MemoProjectBlock = memo(ProjectBlock, areProjectBlockPropsEqual);
 
 export function SidebarWorkspaceList({
-  statusWorkspacePlacements,
+  statusGroups,
   projects,
   projectNamesByKey,
   collapsedProjectKeys,
@@ -2388,14 +2377,19 @@ export function SidebarWorkspaceList({
     }
     return labels;
   }, [hosts]);
+  const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
+  const supportsMultiplicityByServerId = useHostFeatureMap(serverIds, "workspaceMultiplicity");
+  const showHostLabels = useMemo(() => shouldShowSidebarHostLabels(projects), [projects]);
 
   const content =
     groupMode === "status" ? (
       <SidebarStatusModeWrapper
-        statusWorkspacePlacements={statusWorkspacePlacements}
+        statusGroups={statusGroups}
         projectNamesByKey={projectNamesByKey}
         shortcutIndexByWorkspaceKey={shortcutIndexByWorkspaceKey}
         onWorkspacePress={onWorkspacePress}
+        hostLabelByServerId={hostLabelByServerId}
+        showHostLabels={showHostLabels}
       />
     ) : (
       <ProjectModeList
@@ -2409,6 +2403,8 @@ export function SidebarWorkspaceList({
         parentGestureRef={parentGestureRef}
         pathname={pathname}
         hostLabelByServerId={hostLabelByServerId}
+        showHostLabels={showHostLabels}
+        supportsMultiplicityByServerId={supportsMultiplicityByServerId}
       />
     );
 
@@ -2416,25 +2412,31 @@ export function SidebarWorkspaceList({
 }
 
 function SidebarStatusModeWrapper({
-  statusWorkspacePlacements,
+  statusGroups,
   projectNamesByKey,
   shortcutIndexByWorkspaceKey: _projectShortcutIndex,
   onWorkspacePress,
+  hostLabelByServerId,
+  showHostLabels,
 }: {
-  statusWorkspacePlacements: SidebarStatusWorkspacePlacement[];
+  statusGroups: StatusGroup[];
   projectNamesByKey: Map<string, string>;
   shortcutIndexByWorkspaceKey: Map<string, number>;
   onWorkspacePress?: () => void;
+  hostLabelByServerId: ReadonlyMap<string, string>;
+  showHostLabels: boolean;
 }) {
   const showShortcutBadges = useShowShortcutBadges();
 
   return (
     <SidebarStatusWorkspaceList
-      workspaces={statusWorkspacePlacements}
+      groups={statusGroups}
       projectNamesByKey={projectNamesByKey}
       shortcutIndexByWorkspaceKey={_projectShortcutIndex}
       showShortcutBadges={showShortcutBadges}
       onWorkspacePress={onWorkspacePress}
+      hostLabelByServerId={hostLabelByServerId}
+      showHostLabels={showHostLabels}
     />
   );
 }
@@ -2450,12 +2452,16 @@ function ProjectModeList({
   parentGestureRef,
   pathname,
   hostLabelByServerId,
+  showHostLabels,
+  supportsMultiplicityByServerId,
 }: Omit<
   SidebarWorkspaceListProps,
-  "statusWorkspacePlacements" | "projectNamesByKey" | "groupMode" | "isRefreshing" | "onRefresh"
+  "statusGroups" | "projectNamesByKey" | "groupMode" | "isRefreshing" | "onRefresh"
 > & {
   pathname: string;
   hostLabelByServerId: ReadonlyMap<string, string>;
+  showHostLabels: boolean;
+  supportsMultiplicityByServerId: ReadonlyMap<string, boolean>;
 }) {
   const { t } = useTranslation();
   const [creatingWorkspaceIds, setCreatingWorkspaceIds] = useState<Set<string>>(() => new Set());
@@ -2643,6 +2649,8 @@ function ProjectModeList({
           creatingWorkspaceIds={creatingWorkspaceIds}
           activeWorkspaceSelection={activeWorkspaceSelection}
           hostLabelByServerId={hostLabelByServerId}
+          showHostLabels={showHostLabels}
+          supportsMultiplicityByServerId={supportsMultiplicityByServerId}
         />
       );
     },
@@ -2652,6 +2660,8 @@ function ProjectModeList({
       handleWorktreeCreated,
       handleWorkspaceReorder,
       hostLabelByServerId,
+      showHostLabels,
+      supportsMultiplicityByServerId,
       onWorkspacePress,
       onToggleProjectCollapsed,
       parentGestureRef,
@@ -3049,14 +3059,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     flexShrink: 0,
-  },
-  kebabButton: {
-    padding: 2,
-    borderRadius: 4,
-    marginLeft: 2,
-  },
-  kebabButtonHovered: {
-    backgroundColor: theme.colors.surface2,
   },
   statusDotNeedsInput: {
     backgroundColor: theme.colors.palette.amber[500],

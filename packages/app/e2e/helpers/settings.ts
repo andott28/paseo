@@ -371,6 +371,7 @@ export async function expectRetiredSidebarSectionsAbsent(page: Page): Promise<vo
   await expect(sidebar.getByRole("button", { name: "General", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "Diagnostics", exact: true })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "About", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Daemon", exact: true })).toHaveCount(0);
 
   // Host group rows are now flat top-level sections (no drill-in).
   await expect(sidebar.getByTestId("settings-host-section-connections")).toBeVisible();
@@ -393,9 +394,9 @@ export async function expectLocalHostEntryFirst(page: Page, _serverId: string): 
   await expect(sidebar).toBeVisible({ timeout: 15_000 });
 
   // Single-host fixture: the picker is a non-interactive chip (no dropdown to
-  // open) that surfaces the local host by its label. The "Local" marker only
-  // appears on dropdown rows in the multi-host case, which this fixture does not
-  // exercise.
+  // open) that surfaces the local host by its label. The per-row connection
+  // endpoint only appears on dropdown rows in the multi-host case, which this
+  // fixture does not exercise.
   const picker = sidebar.getByTestId("settings-host-picker");
   await expect(picker).toBeVisible();
   await expect(picker.getByText(TEST_HOST_LABEL, { exact: true })).toBeVisible();

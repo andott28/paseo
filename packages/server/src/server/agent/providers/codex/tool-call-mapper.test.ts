@@ -221,6 +221,49 @@ describe("codex tool-call mapper", () => {
     });
   });
 
+  it.each([
+    ["started", "running"],
+    ["interacted", "running"],
+    ["interrupted", "canceled"],
+  ] as const)("maps subAgentActivity %s into canonical sub-agent detail", (kind, status) => {
+    const item = mapCodexToolCallFromThreadItem({
+      type: "subAgentActivity",
+      id: `activity-${kind}`,
+      kind,
+      agentThreadId: "child-thread-1",
+      agentPath: "/root/investigator",
+    });
+
+    expect(item).toEqual({
+      type: "tool_call",
+      callId: `activity-${kind}`,
+      name: "Sub-agent",
+      status,
+      error: null,
+      detail: {
+        type: "sub_agent",
+        subAgentType: "Sub-agent",
+        description: "/root/investigator",
+        log: "",
+        actions: [],
+      },
+    });
+  });
+
+  it("preserves an empty subAgentActivity path as an empty description", () => {
+    const item = mapCodexToolCallFromThreadItem({
+      type: "subAgentActivity",
+      id: "activity-empty-path",
+      kind: "started",
+      agentThreadId: "child-thread-empty-path",
+      agentPath: "",
+    });
+
+    expect(item).toMatchObject({
+      detail: { type: "sub_agent", description: "" },
+    });
+  });
+
   it("does not fail a collabAgentToolCall from child error state alone", () => {
     const item = mapCodexToolCallFromThreadItem({
       type: "collabAgentToolCall",
@@ -701,6 +744,44 @@ describe("codex tool-call mapper", () => {
       input: "Voice response from Codex.",
       output: null,
     });
+  });
+
+  it("replaces mcp image result blocks with placeholder text in tool output", () => {
+    const item = expectMapped(
+      mapCodexToolCallFromThreadItem({
+        type: "mcpToolCall",
+        id: "codex-browser-screenshot",
+        status: "completed",
+        server: "paseo",
+        tool: "browser_screenshot",
+        arguments: { browserId: "11111111-1111-4111-8111-111111111111" },
+        result: {
+          content: [
+            { type: "text", text: "Captured browser screenshot (1x1)." },
+            { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
+          ],
+        },
+      }),
+    );
+
+    expect(item).toEqual({
+      type: "tool_call",
+      callId: "codex-browser-screenshot",
+      name: "paseo.browser_screenshot",
+      status: "completed",
+      error: null,
+      detail: {
+        type: "unknown",
+        input: { browserId: "11111111-1111-4111-8111-111111111111" },
+        output: {
+          content: [
+            { type: "text", text: "Captured browser screenshot (1x1)." },
+            { type: "text", text: "[image]" },
+          ],
+        },
+      },
+    });
+    expect(JSON.stringify(item)).not.toContain("iVBORw0KGgo=");
   });
 
   it("normalizes codex paseo_voice.speak mcp calls and extracts spoken text", () => {

@@ -3,7 +3,13 @@ import { z } from "zod";
 
 import type { AgentCapabilityFlags } from "../agent-sdk-types.js";
 import { checkProviderLaunchAvailable, resolveProviderLaunch } from "../provider-launch-config.js";
-import { ACPAgentClient, DEFAULT_ACP_CAPABILITIES } from "./acp-agent.js";
+import {
+  ACPAgentClient,
+  type ACPClientCapabilityMeta,
+  type ACPConfigFeatureOption,
+  DEFAULT_ACP_CAPABILITIES,
+  type ACPExtensionCommandsParser,
+} from "./acp-agent.js";
 import {
   buildBinaryDiagnosticRows,
   formatProviderDiagnostic,
@@ -29,6 +35,9 @@ interface GenericACPAgentClientOptions {
   waitForInitialCommands?: boolean;
   initialCommandsWaitTimeoutMs?: number;
   diagnosticPhaseTimeoutMs?: number;
+  clientCapabilityMeta?: ACPClientCapabilityMeta;
+  configFeatureOptions?: ACPConfigFeatureOption[];
+  extensionCommandsParser?: ACPExtensionCommandsParser;
 }
 
 export class GenericACPAgentClient extends ACPAgentClient {
@@ -48,6 +57,9 @@ export class GenericACPAgentClient extends ACPAgentClient {
       capabilities: buildGenericACPCapabilities(options),
       waitForInitialCommands: options.waitForInitialCommands,
       initialCommandsWaitTimeoutMs: options.initialCommandsWaitTimeoutMs,
+      clientCapabilityMeta: options.clientCapabilityMeta,
+      configFeatureOptions: options.configFeatureOptions,
+      extensionCommandsParser: options.extensionCommandsParser,
     });
 
     this.command = options.command;

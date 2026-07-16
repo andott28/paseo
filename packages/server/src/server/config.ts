@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolvePaseoNodeEnv } from "./paseo-env.js";
@@ -27,7 +28,13 @@ const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
 const DEFAULT_APP_BASE_URL = "https://app.paseo.sh";
 const DEFAULT_TRUSTED_PROXIES = ["loopback"];
 
-export function resolveBundledWebUiDistDir(moduleUrl: string | URL = import.meta.url): string {
+interface ResolveBundledWebUiDistDirInput {
+  moduleUrl?: string | URL;
+  resourcesPath?: string;
+}
+
+export function resolveBundledWebUiDistDir(input: ResolveBundledWebUiDistDirInput = {}): string {
+  const moduleUrl = input.moduleUrl ?? import.meta.url;
   const moduleDir = path.dirname(fileURLToPath(moduleUrl));
 
   if (path.basename(moduleDir) === "server" && path.basename(path.dirname(moduleDir)) === "src") {
@@ -39,13 +46,22 @@ export function resolveBundledWebUiDistDir(moduleUrl: string | URL = import.meta
     path.basename(path.dirname(moduleDir)) === "server" &&
     path.basename(path.dirname(path.dirname(moduleDir))) === "dist"
   ) {
+    const appDistDir = input.resourcesPath ? path.join(input.resourcesPath, "app-dist") : null;
+
+    if (appDistDir && existsSync(appDistDir)) {
+      return appDistDir;
+    }
+
     return path.resolve(moduleDir, "..", "web-ui");
   }
 
   return path.resolve(moduleDir, "web-ui");
 }
 
-const BUNDLED_WEB_UI_DIST_DIR = resolveBundledWebUiDistDir();
+const processResourcesPath = "resourcesPath" in process ? process.resourcesPath : undefined;
+const BUNDLED_WEB_UI_DIST_DIR = resolveBundledWebUiDistDir({
+  resourcesPath: typeof processResourcesPath === "string" ? processResourcesPath : undefined,
+});
 
 function parseBooleanEnv(value: string | undefined): boolean | undefined {
   if (value === undefined) {
@@ -77,8 +93,6 @@ export type CliConfigOverrides = Partial<{
   relayUseTls: boolean;
   mcpEnabled: boolean;
   mcpInjectIntoAgents: boolean;
-  inMemoriaEnabled: boolean;
-  inMemoriaInjectIntoAgents: boolean;
   webUiEnabled: boolean;
   hostnames: HostnamesConfig;
 }>;
@@ -398,25 +412,11 @@ function resolveWorktreesRoot(
 }
 
 function resolveAppendSystemPrompt(persisted: ReturnType<typeof loadPersistedConfig>): string {
-  const userPrompt = persisted.daemon?.appendSystemPrompt ?? "";
-  // When the optional eval-sandbox integration is enabled (via env var or
-  // per-project in paseo.json), append a short hint so the model knows when
-  // to use the eval_python / eval_js / eval_reset / eval_list tools instead
-  // of writing throwaway scripts to the project. The hint is intentionally
-  // small to keep token cost low.
-  if (process.env.PASEO_EVAL_SANDBOX === "1") {
-    const hint = [
-      "",
-      "## Optional: Eval sandbox",
-      "When the user asks you to explore data, prototype an algorithm, run a quick",
-      "experiment, or iterate on multi-step code, prefer the eval_python and eval_js",
-      "tools over writing throwaway scripts to the project. They run code in a",
-      "persistent kernel, so variables and imports carry across calls. Use eval_reset",
-      "to start fresh, and eval_list to see active sessions.",
-    ].join("\n");
-    return userPrompt ? `${userPrompt}\n\n${hint}` : hint;
-  }
-  return userPrompt;
+  return persisted.daemon?.appendSystemPrompt ?? "";
+}
+
+function resolveBrowserToolsEnabled(persisted: ReturnType<typeof loadPersistedConfig>): boolean {
+  return persisted.daemon?.browserTools?.enabled ?? false;
 }
 
 function resolveStaticLoadConfigSettings(
@@ -428,11 +428,7 @@ function resolveStaticLoadConfigSettings(
     mcpEnabled: cli?.mcpEnabled ?? persisted.daemon?.mcp?.enabled ?? true,
     mcpInjectIntoAgents:
       cli?.mcpInjectIntoAgents ?? persisted.daemon?.mcp?.injectIntoAgents ?? false,
-    inMemoriaEnabled:
-      cli?.inMemoriaEnabled ?? persisted.daemon?.inMemoria?.enabled ?? false,
-    inMemoriaInjectIntoAgents:
-      cli?.inMemoriaInjectIntoAgents ?? persisted.daemon?.inMemoria?.injectIntoAgents ?? false,
-    inMemoriaStoragePath: persisted.daemon?.inMemoria?.storagePath?.trim() || undefined,
+    browserToolsEnabled: resolveBrowserToolsEnabled(persisted),
     autoArchiveAfterMerge: persisted.daemon?.autoArchiveAfterMerge ?? false,
     appendSystemPrompt: resolveAppendSystemPrompt(persisted),
     terminalProfiles: persisted.daemon?.terminalProfiles,
@@ -460,9 +456,7 @@ export function loadConfig(
   const {
     mcpEnabled,
     mcpInjectIntoAgents,
-    inMemoriaEnabled,
-    inMemoriaInjectIntoAgents,
-    inMemoriaStoragePath,
+    browserToolsEnabled,
     autoArchiveAfterMerge,
     appendSystemPrompt,
     terminalProfiles,
@@ -500,9 +494,7 @@ export function loadConfig(
     trustedProxies,
     mcpEnabled,
     mcpInjectIntoAgents,
-    inMemoriaEnabled,
-    inMemoriaInjectIntoAgents,
-    inMemoriaStoragePath,
+    browserToolsEnabled,
     autoArchiveAfterMerge,
     enableTerminalAgentHooks: persisted.daemon?.enableTerminalAgentHooks ?? false,
     appendSystemPrompt,

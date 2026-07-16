@@ -247,6 +247,12 @@ export const ru: TranslationResources = {
       copyCode: "Скопировать код",
       copyTurn: "Копировать ход",
       copyMessage: "Копировать сообщение",
+      forkMenu: "Форкнуть сообщение",
+      forkInNewTab: "Форкнуть в новой вкладке",
+      forkInNewWorkspace: "Форкнуть в новом рабочем пространстве",
+      forkUnavailable: "Обновите хост, чтобы использовать это.",
+      forkMissingWorkspace: "Этот агент не находится в рабочем пространстве.",
+      forkFailed: "Не удалось форкнуть чат",
       openFile: "Открыть файл",
       copied: "Скопировано",
     },
@@ -420,7 +426,21 @@ export const ru: TranslationResources = {
         enterUrl: "Введите URL",
         openDevTools: "Открыть инструменты разработки браузера",
         cancelSelector: "Отменить выбор элемента",
-        selectElement: "Выберите элемент",
+        annotateElement: "Аннотировать элемент",
+        screenshotElement: "Снимок элемента",
+        screenshotCopied: "Снимок скопирован в буфер обмена",
+        elementCopied: "Элемент скопирован в буфер обмена",
+        screenshotFailed: "Не удалось скопировать снимок",
+      },
+      annotate: {
+        title: "Аннотировать элемент",
+        placeholder: "Сообщение агенту об этом элементе…",
+        submit: "Прикрепить",
+        cancel: "Отмена",
+      },
+      devices: {
+        label: "Размер устройства",
+        responsive: "Адаптивный",
       },
       errors: {
         failedToLoad: "Не удалось загрузить страницу",
@@ -706,11 +726,19 @@ export const ru: TranslationResources = {
         tooLarge: "Разница слишком велика для отображения",
         unified: "Единый дифференциал",
         split: "Параллельная разница",
+        switchToUnified: "Переключить на объединенный diff",
+        switchToSplit: "Переключить на diff рядом",
+        showTreeView: "Показать дерево папок",
+        showFlatView: "Показать плоский список файлов",
+        options: "Параметры diff",
         hideWhitespace: "Скрыть пробелы",
+        showWhitespace: "Показать пробелы",
         scrollLongLines: "Прокручивать длинные строки",
         wrapLongLines: "Перенос длинных строк",
         collapseAll: "Свернуть все файлы",
         expandAll: "Развернуть все файлы",
+        collapseAllFolders: "Свернуть все папки",
+        expandAllFolders: "Развернуть все папки",
         refreshing: "Освежающий",
         refresh: "Обновить",
         refreshState: "Обновить состояние git и GitHub.",
@@ -783,6 +811,7 @@ export const ru: TranslationResources = {
     },
     sections: {
       sessions: "История",
+      schedules: "Расписания",
     },
     worktreeSetup: {
       title: "Настройка сценариев рабочего дерева",
@@ -951,8 +980,17 @@ export const ru: TranslationResources = {
         upToDate: "Приложение актуально.",
         upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
         pending: "Мы сообщим вам, когда обновление будет готово.",
+        pendingWithLastChecked:
+          "Мы сообщим вам, когда обновление будет готово. Последняя проверка в {{time}}.",
+        pendingWithVersion: "Найдено обновление: {{version}}. Загрузка...",
+        pendingWithVersionAndLastChecked:
+          "Найдено обновление: {{version}}. Загрузка... Последняя проверка в {{time}}.",
         availableWithVersion: "Обновление готово:{{version}}",
+        availableWithVersionAndLastChecked:
+          "Обновление готово:{{version}}. Последняя проверка в {{time}}.",
         available: "Обновление приложения готово к установке.",
+        availableWithLastChecked:
+          "Обновление приложения готово к установке. Последняя проверка в {{time}}.",
         installed: "Обновление приложения установлено. Требуется перезагрузка.",
         failed: "Не удалось обновить приложение.",
         idle: "Статус обновления еще не проверен.",
@@ -1044,6 +1082,12 @@ export const ru: TranslationResources = {
       },
     },
   },
+  rootError: {
+    kicker: "Что-то пошло не так",
+    title: "В Paseo возникла проблема.",
+    body: "Попробуйте снова перезагрузить приложение. Если это повторяется, приложите приведенные ниже подробности к отчету.",
+    details: "Подробности",
+  },
   startup: {
     errorTitle: "Что- то пошло не так",
     errorDescription:
@@ -1075,7 +1119,8 @@ export const ru: TranslationResources = {
     },
   },
   projectPicker: {
-    placeholder: "Введите путь к каталогу...",
+    placeholder: "Введите текст для поиска...",
+    browse: "Обзор…",
     opening: "Открытие проекта...",
     searching: "Идет поиск...",
     empty: "Начните вводить путь",
@@ -1405,6 +1450,7 @@ export const ru: TranslationResources = {
     },
     backToWorkspace: "Назад",
     addHost: "Добавить хост",
+    enableBuiltInDaemon: "Включить встроенный демон",
     projects: "Проекты",
     projectList: {
       hostLoadFailed: "Не удалось загрузить проекты с хоста{{hostName}}:{{message}}.",
@@ -1413,7 +1459,6 @@ export const ru: TranslationResources = {
     groupInfo: "О{{title}}",
     sections: {
       general: "Общий",
-      daemon: "Daemon",
       appearance: "Появление",
       shortcuts: "Ярлыки",
       integrations: "Интеграции",
@@ -1428,7 +1473,7 @@ export const ru: TranslationResources = {
       providers: "Провайдеры",
       usage: "Использование",
       terminals: "Terminals",
-      host: "Host",
+      host: "Обзор",
     },
     general: {
       title: "Общий",
@@ -1456,6 +1501,11 @@ export const ru: TranslationResources = {
         label: "Terminal прокрутка назад",
         description: "Строки, хранящиеся во встроенном буфере терминала.",
         accessibilityLabel: "Линии прокрутки Terminal",
+      },
+      autoExpandReasoning: {
+        label: "Всегда разворачивать размышления",
+        description:
+          "По умолчанию показывать блоки размышлений и логики агента полностью развернутыми",
       },
       language: {
         label: "Язык",
@@ -1538,6 +1588,9 @@ export const ru: TranslationResources = {
           ghostty: "Призрачный",
           auto: "Система",
         },
+      },
+      detailLevel: {
+        title: "Уровень детализации",
       },
       fonts: {
         title: "Шрифты",

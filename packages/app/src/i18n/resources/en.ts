@@ -244,6 +244,12 @@ export const en = {
       copyCode: "Copy code",
       copyTurn: "Copy turn",
       copyMessage: "Copy message",
+      forkMenu: "Fork chat",
+      forkInNewTab: "Fork in a new tab",
+      forkInNewWorkspace: "Fork in a new workspace",
+      forkUnavailable: "Update the host to use this.",
+      forkMissingWorkspace: "This agent is not in a workspace.",
+      forkFailed: "Failed to fork chat",
       openFile: "Open file",
       copied: "Copied",
     },
@@ -416,7 +422,21 @@ export const en = {
         enterUrl: "Enter URL",
         openDevTools: "Open browser dev tools",
         cancelSelector: "Cancel element selector",
-        selectElement: "Select element",
+        annotateElement: "Annotate element",
+        screenshotElement: "Screenshot element",
+        screenshotCopied: "Copied screenshot to clipboard",
+        elementCopied: "Copied element to clipboard",
+        screenshotFailed: "Couldn't copy screenshot",
+      },
+      annotate: {
+        title: "Annotate element",
+        placeholder: "Message to the agent about this element…",
+        submit: "Attach",
+        cancel: "Cancel",
+      },
+      devices: {
+        label: "Device size",
+        responsive: "Responsive",
       },
       errors: {
         failedToLoad: "Failed to load page",
@@ -694,11 +714,19 @@ export const en = {
         tooLarge: "Diff too large to display",
         unified: "Unified diff",
         split: "Side-by-side diff",
+        switchToUnified: "Switch to unified diff",
+        switchToSplit: "Switch to side-by-side diff",
+        showTreeView: "Show folder tree",
+        showFlatView: "Show flat file list",
+        options: "Diff options",
         hideWhitespace: "Hide whitespace",
+        showWhitespace: "Show whitespace",
         scrollLongLines: "Scroll long lines",
         wrapLongLines: "Wrap long lines",
         collapseAll: "Collapse all files",
         expandAll: "Expand all files",
+        collapseAllFolders: "Collapse all folders",
+        expandAllFolders: "Expand all folders",
         refreshing: "Refreshing",
         refresh: "Refresh",
         refreshState: "Refresh git and GitHub state",
@@ -771,6 +799,7 @@ export const en = {
     },
     sections: {
       sessions: "History",
+      schedules: "Schedules",
     },
     worktreeSetup: {
       title: "Set up worktree scripts",
@@ -954,8 +983,15 @@ export const en = {
         upToDate: "App is up to date.",
         upToDateWithLastChecked: "Up to date. Last checked at {{time}}.",
         pending: "We'll let you know when the update is ready.",
+        pendingWithLastChecked:
+          "We'll let you know when the update is ready. Last checked at {{time}}.",
+        pendingWithVersion: "Update found: {{version}}. Downloading...",
+        pendingWithVersionAndLastChecked:
+          "Update found: {{version}}. Downloading... Last checked at {{time}}.",
         availableWithVersion: "Update ready: {{version}}",
+        availableWithVersionAndLastChecked: "Update ready: {{version}}. Last checked at {{time}}.",
         available: "An app update is ready to install.",
+        availableWithLastChecked: "An app update is ready to install. Last checked at {{time}}.",
         installed: "App update installed. Restart required.",
         failed: "Failed to update app.",
         idle: "Update status has not been checked yet.",
@@ -1042,6 +1078,12 @@ export const en = {
       },
     },
   },
+  rootError: {
+    kicker: "Something went wrong",
+    title: "Paseo ran into a problem.",
+    body: "Try again to reload the app. If this keeps happening, include the details below when you report it.",
+    details: "Details",
+  },
   startup: {
     errorTitle: "Something went wrong",
     errorDescription:
@@ -1073,7 +1115,8 @@ export const en = {
     },
   },
   projectPicker: {
-    placeholder: "Type a directory path...",
+    placeholder: "Type to search...",
+    browse: "Browse…",
     opening: "Opening project...",
     searching: "Searching...",
     empty: "Start typing a path",
@@ -1399,6 +1442,7 @@ export const en = {
     },
     backToWorkspace: "Back",
     addHost: "Add host",
+    enableBuiltInDaemon: "Enable built-in daemon",
     projects: "Projects",
     projectList: {
       hostLoadFailed: "Couldn't load projects from host {{hostName}}: {{message}}",
@@ -1407,7 +1451,6 @@ export const en = {
     groupInfo: "About {{title}}",
     sections: {
       general: "General",
-      daemon: "Daemon",
       appearance: "Appearance",
       shortcuts: "Shortcuts",
       integrations: "Integrations",
@@ -1422,7 +1465,7 @@ export const en = {
       providers: "Providers",
       usage: "Usage",
       terminals: "Terminals",
-      host: "Host",
+      host: "Overview",
     },
     general: {
       title: "General",
@@ -1450,6 +1493,10 @@ export const en = {
         label: "Terminal scrollback",
         description: "Lines kept in the built-in terminal buffer",
         accessibilityLabel: "Terminal scrollback lines",
+      },
+      autoExpandReasoning: {
+        label: "Always expand reasoning",
+        description: "Show agent thinking and chain-of-thought blocks fully expanded by default",
       },
       language: {
         label: "Language",
@@ -1531,6 +1578,9 @@ export const en = {
           ghostty: "Ghostty",
           auto: "System",
         },
+      },
+      detailLevel: {
+        title: "Detail level",
       },
       fonts: {
         title: "Fonts",

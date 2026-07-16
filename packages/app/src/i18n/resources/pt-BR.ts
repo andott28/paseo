@@ -248,6 +248,12 @@ export const ptBR: TranslationResources = {
       copyCode: "Copiar código",
       copyTurn: "Copiar turno",
       copyMessage: "Copiar mensagem",
+      forkMenu: "Bifurcar mensagem",
+      forkInNewTab: "Bifurcar em uma nova aba",
+      forkInNewWorkspace: "Bifurcar em um novo workspace",
+      forkUnavailable: "Atualize o host para usar isto.",
+      forkMissingWorkspace: "Este agente não está em um workspace.",
+      forkFailed: "Falha ao bifurcar o chat",
       openFile: "Abrir arquivo",
       copied: "Copiado",
     },
@@ -420,7 +426,21 @@ export const ptBR: TranslationResources = {
         enterUrl: "Inserir URL",
         openDevTools: "Abrir ferramentas de desenvolvedor do navegador",
         cancelSelector: "Cancelar seletor de elemento",
-        selectElement: "Selecionar elemento",
+        annotateElement: "Anotar elemento",
+        screenshotElement: "Capturar elemento",
+        screenshotCopied: "Captura copiada para a área de transferência",
+        elementCopied: "Elemento copiado para a área de transferência",
+        screenshotFailed: "Não foi possível copiar a captura",
+      },
+      annotate: {
+        title: "Anotar elemento",
+        placeholder: "Mensagem ao agente sobre este elemento…",
+        submit: "Anexar",
+        cancel: "Cancelar",
+      },
+      devices: {
+        label: "Tamanho do dispositivo",
+        responsive: "Responsivo",
       },
       errors: {
         failedToLoad: "Falha ao carregar página",
@@ -705,11 +725,19 @@ export const ptBR: TranslationResources = {
         tooLarge: "Diff grande demais para exibir",
         unified: "Diff unificado",
         split: "Diff lado a lado",
+        switchToUnified: "Alternar para diff unificado",
+        switchToSplit: "Alternar para diff lado a lado",
+        showTreeView: "Mostrar árvore de pastas",
+        showFlatView: "Mostrar lista plana de arquivos",
+        options: "Opções do diff",
         hideWhitespace: "Ocultar espaços em branco",
+        showWhitespace: "Mostrar espaços em branco",
         scrollLongLines: "Rolar linhas longas",
         wrapLongLines: "Quebrar linhas longas",
         collapseAll: "Recolher todos os arquivos",
         expandAll: "Expandir todos os arquivos",
+        collapseAllFolders: "Recolher todas as pastas",
+        expandAllFolders: "Expandir todas as pastas",
         refreshing: "Atualizando",
         refresh: "Atualizar",
         refreshState: "Atualizar estado do git e do GitHub",
@@ -782,6 +810,7 @@ export const ptBR: TranslationResources = {
     },
     sections: {
       sessions: "Histórico",
+      schedules: "Agendamentos",
     },
     worktreeSetup: {
       title: "Configurar scripts de worktree",
@@ -950,8 +979,17 @@ export const ptBR: TranslationResources = {
         upToDate: "O app está atualizado.",
         upToDateWithLastChecked: "Atualizado. Última verificação às {{time}}.",
         pending: "Avisaremos quando a atualização estiver pronta.",
+        pendingWithLastChecked:
+          "Avisaremos quando a atualização estiver pronta. Última verificação às {{time}}.",
+        pendingWithVersion: "Atualização encontrada: {{version}}. Baixando...",
+        pendingWithVersionAndLastChecked:
+          "Atualização encontrada: {{version}}. Baixando... Última verificação às {{time}}.",
         availableWithVersion: "Atualização pronta: {{version}}",
+        availableWithVersionAndLastChecked:
+          "Atualização pronta: {{version}}. Última verificação às {{time}}.",
         available: "Há uma atualização do app pronta para instalar.",
+        availableWithLastChecked:
+          "Há uma atualização do app pronta para instalar. Última verificação às {{time}}.",
         installed: "Atualização do app instalada. Reinicialização obrigatória.",
         failed: "Falha ao atualizar o app.",
         idle: "O status de atualização ainda não foi verificado.",
@@ -1040,6 +1078,12 @@ export const ptBR: TranslationResources = {
       },
     },
   },
+  rootError: {
+    kicker: "Algo deu errado",
+    title: "O Paseo encontrou um problema.",
+    body: "Tente novamente para recarregar o app. Se isso continuar acontecendo, inclua os detalhes abaixo ao relatar o problema.",
+    details: "Detalhes",
+  },
   startup: {
     errorTitle: "Algo deu errado",
     errorDescription:
@@ -1071,7 +1115,8 @@ export const ptBR: TranslationResources = {
     },
   },
   projectPicker: {
-    placeholder: "Digite um caminho de diretório...",
+    placeholder: "Digite para pesquisar...",
+    browse: "Procurar…",
     opening: "Abrindo projeto...",
     searching: "Buscando...",
     empty: "Comece digitando um caminho",
@@ -1399,6 +1444,7 @@ export const ptBR: TranslationResources = {
     },
     backToWorkspace: "Voltar",
     addHost: "Adicionar host",
+    enableBuiltInDaemon: "Ativar o daemon integrado",
     projects: "Projetos",
     projectList: {
       hostLoadFailed: "Não foi possível carregar projetos do host {{hostName}}: {{message}}",
@@ -1407,7 +1453,6 @@ export const ptBR: TranslationResources = {
     groupInfo: "Sobre {{title}}",
     sections: {
       general: "Geral",
-      daemon: "Daemon",
       appearance: "Aparência",
       shortcuts: "Atalhos",
       integrations: "Integrações",
@@ -1422,7 +1467,7 @@ export const ptBR: TranslationResources = {
       providers: "Provedores",
       usage: "Uso",
       terminals: "Terminais",
-      host: "Host",
+      host: "Visão geral",
     },
     general: {
       title: "Geral",
@@ -1451,6 +1496,11 @@ export const ptBR: TranslationResources = {
         label: "Scrollback do terminal",
         description: "Linhas mantidas no buffer do terminal integrado",
         accessibilityLabel: "Linhas do scrollback do terminal",
+      },
+      autoExpandReasoning: {
+        label: "Sempre expandir raciocínio",
+        description:
+          "Mostrar os blocos de pensamento e raciocínio do agente totalmente expandidos por padrão",
       },
       language: {
         label: "Idioma",
@@ -1532,6 +1582,9 @@ export const ptBR: TranslationResources = {
           ghostty: "Ghostty",
           auto: "Sistema",
         },
+      },
+      detailLevel: {
+        title: "Nível de detalhe",
       },
       fonts: {
         title: "Fontes",

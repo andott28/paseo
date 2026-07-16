@@ -14,6 +14,7 @@ import { useSidebarOrderStore } from "@/stores/sidebar-order-store";
 import { useSidebarViewStore } from "@/stores/sidebar-view-store";
 import type { HostProfile } from "@/types/host-connection";
 import { WorkspaceShortcutTargetsSubscriber } from "./workspace-shortcut-targets-subscriber";
+import { SidebarModelProvider } from "./sidebar/sidebar-model";
 
 vi.hoisted(() => {
   (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
@@ -86,7 +87,7 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
     });
     useSidebarViewStore.setState({
       groupMode: "project",
-      hostFilter: null,
+      hostFilters: [],
     });
 
     act(() => {
@@ -122,7 +123,11 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
 
   it("publishes workspace shortcut targets without rendering the sidebar", async () => {
     await act(async () => {
-      root?.render(<WorkspaceShortcutTargetsSubscriber enabled={true} />);
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
     });
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
@@ -186,7 +191,11 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
     });
 
     await act(async () => {
-      root?.render(<WorkspaceShortcutTargetsSubscriber enabled={true} />);
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
     });
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
@@ -216,11 +225,15 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
         );
       useSessionStore.getState().setHasHydratedWorkspaces("host-a", true);
       useSessionStore.getState().setHasHydratedWorkspaces("host-b", true);
-      useSidebarViewStore.getState().setHostFilter("host-b");
+      useSidebarViewStore.getState().toggleHostFilter("host-b");
     });
 
     await act(async () => {
-      root?.render(<WorkspaceShortcutTargetsSubscriber enabled={true} />);
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
     });
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([
@@ -238,11 +251,19 @@ describe("WorkspaceShortcutTargetsSubscriber", () => {
 
   it("clears targets when disabled", async () => {
     await act(async () => {
-      root?.render(<WorkspaceShortcutTargetsSubscriber enabled={true} />);
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={true} />
+        </SidebarModelProvider>,
+      );
     });
 
     await act(async () => {
-      root?.render(<WorkspaceShortcutTargetsSubscriber enabled={false} />);
+      root?.render(
+        <SidebarModelProvider>
+          <WorkspaceShortcutTargetsSubscriber enabled={false} />
+        </SidebarModelProvider>,
+      );
     });
 
     expect(useKeyboardShortcutsStore.getState().sidebarShortcutWorkspaceTargets).toEqual([]);
